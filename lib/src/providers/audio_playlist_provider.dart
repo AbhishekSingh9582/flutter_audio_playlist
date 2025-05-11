@@ -32,6 +32,7 @@ class AudioPlaylistProvider with ChangeNotifier {
     });
     _audioPlayerService.playbackModeStream.listen((mode) {
       _playbackMode = mode;
+      _upNextTracks = _audioPlayerService.getUpNextTracks();
       notifyListeners();
     });
     _audioPlayerService.sleepTimerStream.listen((timer) {
