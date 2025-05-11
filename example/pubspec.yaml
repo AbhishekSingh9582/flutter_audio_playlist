@@ -1,0 +1,16 @@
+name: flutter_audio_playlist_example
+description: Example app to test the flutter_audio_playlist package
+publish_to: 'none'
+
+environment:
+  sdk: '>=2.17.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+  provider: ^6.1.1
+  flutter_audio_playlist:
+    path: ../
+
+flutter:
+  uses-material-design: true
