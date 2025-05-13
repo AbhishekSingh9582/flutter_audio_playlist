@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_audio_playlist/src/utils/extension.dart';
 import 'package:flutter_audio_playlist/src/widgets/app_cached_network.dart';
+import 'package:just_audio/just_audio.dart';
 import 'package:provider/provider.dart';
 import '../providers/audio_playlist_provider.dart';
+import '../models/audio_track.dart'; 
 import '../utils/format_duration.dart';
 import '../enums/playback_mode.dart';
 
@@ -33,33 +35,51 @@ class AudioPlayerScreen extends StatefulWidget {
 }
 
 class _AudioPlayerScreenState extends State<AudioPlayerScreen> {
-  void _showSleepTimerBottomSheet(BuildContext context) {
+  void _showSleepTimerBottomSheet(
+      BuildContext modalContext, AudioPlaylistProvider providerForActions) {
     showModalBottomSheet(
-      context: context,
-      builder: (context) {
-        final provider = Provider.of<AudioPlaylistProvider>(context);
+      context: modalContext, // Use the context from where the sheet is launched
+      builder: (bottomSheetBuilderContext) {
+        // providerForActions is used to call methods like setSleepTimer, cancelSleepTimer
+        // For displaying reactive data like the current sleep timer value, use Selector
         return Container(
           padding: const EdgeInsets.all(16),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              if (provider.sleepTimer != null)
-                Text('Time left: ${formatDuration(provider.sleepTimer!)}'),
+              Selector<AudioPlaylistProvider, Duration?>(
+                selector: (_, p) => p.sleepTimer,
+                builder: (_, sleepTimerValue, __) {
+                  if (sleepTimerValue != null) {
+                    return Padding(
+                      padding: const EdgeInsets.only(bottom: 8.0),
+                      child: Text('Time left: ${formatDuration(sleepTimerValue)}', style: const TextStyle(fontWeight: FontWeight.bold)),
+                    );
+                  }
+                  return const SizedBox.shrink();
+                },
+              ),
               ...widget.sleepTimerOptions.map((duration) => ListTile(
                     title: Text('${duration.inMinutes} minutes'),
                     onTap: () {
-                      provider.setSleepTimer(duration);
-                      Navigator.pop(context);
+                      providerForActions.setSleepTimer(duration);
+                      Navigator.pop(bottomSheetBuilderContext);
                     },
                   )),
-              if (provider.sleepTimer != null)
-                TextButton(
-                  onPressed: () {
-                    provider.cancelSleepTimer();
-                    Navigator.pop(context);
-                  },
-                  child: const Text('Cancel Timer'),
-                ),
+              Selector<AudioPlaylistProvider, Duration?>(
+                selector: (_, p) => p.sleepTimer,
+                builder: (_, sleepTimerValue, __) {
+                  if (sleepTimerValue != null) {
+                    return TextButton(
+                      onPressed: () {
+                        providerForActions.cancelSleepTimer();
+                        Navigator.pop(bottomSheetBuilderContext);
+                      },
+                      child: const Text('Cancel Timer'),
+                    );
+                  }
+                  return const SizedBox.shrink();
+                }),
             ],
           ),
         );
@@ -71,201 +91,358 @@ class _AudioPlayerScreenState extends State<AudioPlayerScreen> {
   Widget build(BuildContext context) {
     if (widget.customPlayerScreen != null) return widget.customPlayerScreen!;
     final width = MediaQuery.of(context).size.width;
-    final double statusBarHeight = MediaQuery.of(context).padding.top;
 
-    return Consumer<AudioPlaylistProvider>(
-      builder: (context, provider, child) {
-        if (provider.currentTrack == null) {
+    // Use Selector to rebuild the core player UI only when currentTrack changes.
+    // Other changes (like position) won't cause this Selector's builder to run.
+    return Selector<AudioPlaylistProvider, AudioTrack?>(
+      selector: (_, provider) => provider.currentTrack,
+      builder: (context, currentTrack, child) {
+        if (currentTrack == null) {
           return const Scaffold(
-            body: Center(child: Text('No track selected')),
+            body: Center(child: Text('No track currently playing')),
           );
         }
 
-        return Scaffold(
-          body: SingleChildScrollView(
-            child: Column(
-              children: [
-                SizedBox(
-                  height: statusBarHeight,
-                ),
-                Padding(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 20.0, vertical: 15),
-                    child: Row(
-                      children: [
-                        InkWell(
-                            onTap: () {
-                              Navigator.pop(context);
-                            },
-                            child: const Icon(Icons.arrow_back_ios_new)),
-                      ],
-                    )),
-                Column(
-                  mainAxisAlignment: MainAxisAlignment.start,
+        // Get the provider instance for actions (like showing bottom sheet).
+        // context.read is safe here because Selector handles the rebuild logic.
+        final audioProviderForActions = context.read<AudioPlaylistProvider>();
+
+        return _AudioPlayerScreenBody(
+          width: width,
+          enableShuffle: widget.enableShuffle,
+          enableRepeat: widget.enableRepeat,
+          enableSleepTimer: widget.enableSleepTimer,
+          enableUpNext: widget.enableUpNext,
+          showSleepTimerBottomSheet: (bottomSheetLauncherContext) => _showSleepTimerBottomSheet(bottomSheetLauncherContext, audioProviderForActions),
+        );
+      },
+    );
+  }
+}
+
+class _AudioPlayerScreenBody extends StatelessWidget {
+  final double width;
+  final bool enableShuffle;
+  final bool enableRepeat;
+  final bool enableSleepTimer;
+  final bool enableUpNext;
+  final Function(BuildContext) showSleepTimerBottomSheet;
+
+  const _AudioPlayerScreenBody({
+    required this.width,
+    required this.enableShuffle,
+    required this.enableRepeat,
+    required this.enableSleepTimer,
+    required this.enableUpNext,
+    required this.showSleepTimerBottomSheet,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final double statusBarHeight = MediaQuery.of(context).padding.top;
+    return Scaffold(
+      body: SingleChildScrollView(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            SizedBox(height: statusBarHeight),
+            Padding(
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 20.0, vertical: 15),
+              child: InkWell(
+                onTap: () => Navigator.pop(context),
+                child: const Icon(Icons.arrow_back_ios_new),
+              ),
+            ),
+            _TrackDetailsSection(
+              width: width,
+              enableSleepTimer: enableSleepTimer,
+              showSleepTimerBottomSheet: () =>
+                  showSleepTimerBottomSheet(context),
+            ),
+            16.toVerticalSizedBox,
+            const _ProgressBarSection(),
+            _ControlsSection(
+              enableShuffle: enableShuffle,
+              enableRepeat: enableRepeat,
+            ),
+            if (enableUpNext) const _UpNextSection(),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _TrackDetailsSection extends StatelessWidget {
+  final double width;
+  final bool enableSleepTimer;
+  final VoidCallback showSleepTimerBottomSheet;
+
+  const _TrackDetailsSection({
+    required this.width,
+    required this.enableSleepTimer,
+    required this.showSleepTimerBottomSheet,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final currentTrack = context
+        .select<AudioPlaylistProvider, AudioTrack?>((p) => p.currentTrack);
+    if (currentTrack == null) return const SizedBox.shrink();
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 20.0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          ClipRRect(
+            borderRadius: BorderRadius.circular(16),
+            child: AppCachedNetworkImage(
+              url: currentTrack.imageUrl,
+              width: width,
+              height: width,
+              fit: BoxFit.cover,
+            ),
+          ),
+          16.toVerticalSizedBox,
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 20.0),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          ClipRRect(
-                            borderRadius: BorderRadius.circular(16),
-                            child: AppCachedNetworkImage(
-                              url: provider.currentTrack!.imageUrl,
-                              width: width,
-                              height: width,
-                              fit: BoxFit.cover,
-                            ),
-                          ),
-                          16.toVerticalSizedBox,
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              Text(
-                                provider.currentTrack!.title,
-                                style: const TextStyle(
-                                  fontSize: 20,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                              if (widget.enableSleepTimer)
-                                IconButton(
-                                  icon: const Icon(Icons.timer),
-                                  onPressed: () =>
-                                      _showSleepTimerBottomSheet(context),
-                                ),
-                            ],
-                          ),
-                          Text(
-                            provider.currentTrack!.subtitle,
-                            style: const TextStyle(color: Colors.grey),
-                          ),
-                        ],
-                      ),
+                    Text(
+                      currentTrack.title,
+                      style: const TextStyle(
+                          fontSize: 20, fontWeight: FontWeight.bold),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                     ),
-                    const SizedBox(height: 16),
-                    Slider(
-                      value: provider.position.inMilliseconds.toDouble(),
-                      max: (provider.totalDuration?.inMilliseconds ?? 1)
-                          .toDouble(),
-                      onChanged: (value) =>
-                          provider.seek(Duration(milliseconds: value.toInt())),
-                    ),
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 20),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Text(formatDuration(provider.position)),
-                          Text(formatDuration(
-                              provider.totalDuration ?? Duration.zero)),
-                        ],
-                      ),
-                    ),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        if (widget.enableShuffle)
-                          IconButton(
-                            icon: Icon(
-                              Icons.shuffle,
-                              color:
-                                  provider.playbackMode == PlaybackMode.shuffle
-                                      ? Colors.blue
-                                      : Colors.grey,
-                            ),
-                            onPressed: () => provider
-                                .togglePlaybackMode(PlaybackMode.shuffle),
-                          ),
-                        Row(
-                          children: [
-                            IconButton(
-                              icon: const Icon(Icons.skip_previous),
-                              onPressed: provider.playPrevious,
-                            ),
-                            IconButton(
-                              iconSize: 64,
-                              icon: Icon(
-                                provider.isPlaying
-                                    ? Icons.pause_circle
-                                    : Icons.play_circle,
-                              ),
-                              onPressed: provider.togglePlayPause,
-                            ),
-                            IconButton(
-                              icon: const Icon(Icons.skip_next),
-                              onPressed: provider.playNext,
-                            ),
-                          ],
-                        ),
-                        if (widget.enableRepeat)
-                          IconButton(
-                            icon: Icon(
-                              provider.playbackMode == PlaybackMode.repeat
-                                  ? Icons.repeat_one
-                                  : Icons.repeat,
-                              color:
-                                  provider.playbackMode == PlaybackMode.repeat
-                                      ? Colors.blue
-                                      : Colors.grey,
-                            ),
-                            onPressed: () => provider
-                                .togglePlaybackMode(PlaybackMode.repeat),
-                          ),
-                      ],
+                    Text(
+                      currentTrack.subtitle,
+                      style: const TextStyle(color: Colors.grey),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                     ),
                   ],
                 ),
-                if (widget.enableUpNext && provider.upNextTracks.isNotEmpty)
-                  Container(
-                    padding: const EdgeInsets.all(16),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Text(
-                          'Up Next',
-                          style: TextStyle(fontWeight: FontWeight.bold),
+              ),
+              if (enableSleepTimer)
+                IconButton(
+                  icon: const Icon(Icons.timer_outlined),
+                  onPressed: showSleepTimerBottomSheet,
+                ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ProgressBarSection extends StatelessWidget {
+  const _ProgressBarSection();
+
+  @override
+  Widget build(BuildContext context) {
+    final position =
+        context.select<AudioPlaylistProvider, Duration>((p) => p.position);
+    final totalDuration = context
+        .select<AudioPlaylistProvider, Duration?>((p) => p.totalDuration);
+    final provider = context.read<AudioPlaylistProvider>();
+
+    return Column(
+      children: [
+        Slider(
+          value: position.inMilliseconds
+              .toDouble()
+              .clamp(0.0, (totalDuration?.inMilliseconds ?? 1).toDouble()),
+          max: (totalDuration?.inMilliseconds ?? 1).toDouble(),
+          onChanged: (value) =>
+              provider.seek(Duration(milliseconds: value.toInt())),
+        ),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 20),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(formatDuration(position)),
+              Text(formatDuration(totalDuration ?? Duration.zero)),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _ControlsSection extends StatelessWidget {
+  final bool enableShuffle;
+  final bool enableRepeat;
+
+  const _ControlsSection(
+      {required this.enableShuffle, required this.enableRepeat});
+
+  @override
+  Widget build(BuildContext context) {
+    
+    final playbackMode = context
+        .select<AudioPlaylistProvider, PlaybackMode>((p) => p.playbackMode);
+    final isPlaying =
+        context.select<AudioPlaylistProvider, bool>((p) => p.isPlaying);
+    final audioProvider =
+        context.read<AudioPlaylistProvider>(); 
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 10.0),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          if (enableShuffle)
+            IconButton(
+              icon: Icon(
+                Icons.shuffle,
+                color: playbackMode == PlaybackMode.shuffle
+                    ? Theme.of(context).colorScheme.primary
+                    : Colors.grey,
+              ),
+              onPressed: () =>
+                  audioProvider.togglePlaybackMode(PlaybackMode.shuffle),
+            )
+          else
+            const SizedBox(width: 48),
+
+          IconButton(
+            icon: const Icon(Icons.skip_previous),
+            iconSize: 36,
+            onPressed: audioProvider.playPrevious,
+          ),
+          IconButton(
+            iconSize: 64,
+            icon: AnimatedSwitcher(
+              duration: const Duration(milliseconds: 200),
+              transitionBuilder: (Widget child, Animation<double> animation) {
+                return ScaleTransition(scale: animation, child: child);
+              },
+              child: Icon(
+                isPlaying
+                    ? Icons.pause_circle_filled
+                    : Icons.play_circle_filled,
+                key:
+                    ValueKey<bool>(isPlaying), 
+              ),
+            ),
+            onPressed: audioProvider.togglePlayPause,
+          ),
+          IconButton(
+            icon: const Icon(Icons.skip_next),
+            iconSize: 36,
+            onPressed: audioProvider.playNext,
+          ),
+          if (enableRepeat)
+            StreamBuilder<LoopMode>(
+                stream: audioProvider.loopModeStream,
+                initialData: audioProvider.currentLoopMode,
+                builder: (context, snapshot) {
+                  final loopMode = snapshot.data ?? LoopMode.off;
+                  return IconButton(
+                    icon: Icon(
+                      loopMode == LoopMode.one
+                          ? Icons.repeat_one
+                          : Icons.repeat,
+                      color: loopMode == LoopMode.one ? Theme.of(context).colorScheme.primary : Colors.grey,
+                    ),
+                    onPressed: () =>
+                        audioProvider.togglePlaybackMode(PlaybackMode.repeat),
+                  );
+                })
+          else
+            const SizedBox(width: 48), 
+        ],
+      ),
+    );
+  }
+}
+
+class _UpNextSection extends StatelessWidget {
+  const _UpNextSection();
+
+  @override
+  Widget build(BuildContext context) {
+    final upNextTracks = context
+        .select<AudioPlaylistProvider, List<AudioTrack>>((p) => p.upNextTracks);
+    final provider = context.read<AudioPlaylistProvider>();
+
+    if (upNextTracks.isEmpty) return const SizedBox.shrink();
+
+    return Padding(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Up Next',
+            style: Theme.of(context)
+                .textTheme
+                .titleMedium
+                ?.copyWith(fontWeight: FontWeight.bold),
+          ),
+          10.toVerticalSizedBox,
+          SizedBox(
+            height:
+                120, 
+            child: ListView.builder(
+              scrollDirection: Axis.horizontal,
+              itemCount: upNextTracks.length,
+              itemBuilder: (context, index) {
+                final track = upNextTracks[index];
+                return Card(
+                  elevation: 2,
+                  margin:
+                      const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10)),
+                  child: InkWell(
+                    onTap: () => provider.playTrack(track),
+                    borderRadius: BorderRadius.circular(10),
+                    child: SizedBox(
+                      width: 100, 
+                      child: Padding(
+                        padding: const EdgeInsets.all(8.0),
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            ClipRRect(
+                              borderRadius: BorderRadius.circular(8),
+                              child: AppCachedNetworkImage(
+                                url: track.imageUrl,
+                                width: 60,
+                                height: 60,
+                                fit: BoxFit.cover,
+                              ),
+                            ),
+                            8.toVerticalSizedBox,
+                            Text(
+                              track.title,
+                              style: Theme.of(context).textTheme.bodySmall,
+                              maxLines: 2,
+                              textAlign: TextAlign.center,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ],
                         ),
-                        SizedBox(
-                          height: 100,
-                          child: ListView.builder(
-                            scrollDirection: Axis.horizontal,
-                            itemCount: provider.upNextTracks.length,
-                            itemBuilder: (context, index) {
-                              final track = provider.upNextTracks[index];
-                              return Padding(
-                                padding: const EdgeInsets.all(8.0),
-                                child: GestureDetector(
-                                  onTap: () => provider.playTrack(track),
-                                  child: Column(
-                                    children: [
-                                      AppCachedNetworkImage(
-                                        url: track.imageUrl,
-                                        width: 60,
-                                        height: 60,
-                                        fit: BoxFit.cover,
-                                      ),
-                                      Text(
-                                        track.title,
-                                        maxLines: 1,
-                                        overflow: TextOverflow.ellipsis,
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              );
-                            },
-                          ),
-                        ),
-                      ],
+                      ),
                     ),
                   ),
-              ],
+                );
+              },
             ),
           ),
-        );
-      },
+        ],
+      ),
     );
   }
 }

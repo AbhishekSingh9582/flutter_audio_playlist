@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_audio_playlist/src/enums/playback_mode.dart';
+import 'package:just_audio/just_audio.dart'; // Import for LoopMode
 import '../services/audio_player_service.dart';
 import '../models/audio_track.dart';
 
@@ -35,6 +36,9 @@ class AudioPlaylistProvider with ChangeNotifier {
       _upNextTracks = _audioPlayerService.getUpNextTracks();
       notifyListeners();
     });
+     _audioPlayerService.loopModeStream.listen((loopMode) {
+      notifyListeners(); 
+    });
     _audioPlayerService.sleepTimerStream.listen((timer) {
       _sleepTimer = timer;
       notifyListeners();
@@ -49,6 +53,8 @@ class AudioPlaylistProvider with ChangeNotifier {
   PlaybackMode get playbackMode => _playbackMode;
   Duration? get sleepTimer => _sleepTimer;
   List<AudioTrack> get upNextTracks => _upNextTracks;
+  Stream<LoopMode> get loopModeStream => _audioPlayerService.loopModeStream;
+  LoopMode get currentLoopMode => _audioPlayerService.currentLoopMode;
 
   Future<void> setTracks(List<AudioTrack> tracks) async {
     _tracks = tracks;
