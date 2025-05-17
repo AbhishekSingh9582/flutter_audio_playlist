@@ -1,5 +1,5 @@
 import 'dart:async';
-import 'package:flutter_audio_playlist/src/enums/playback_mode.dart';
+import 'package:flutter_audio_playlist/src/enums/repeat_mode.dart'; // Updated import
 import 'package:just_audio/just_audio.dart';
 import 'package:just_audio_background/just_audio_background.dart';
 import 'package:rxdart/rxdart.dart';
@@ -9,26 +9,28 @@ class AudioPlayerService {
   final AudioPlayer _audioPlayer = AudioPlayer();
   final BehaviorSubject<List<AudioTrack>> _playlist =
       BehaviorSubject.seeded([]);
-  final BehaviorSubject<PlaybackMode> _playbackMode =
-      BehaviorSubject.seeded(PlaybackMode.normal);
+  final BehaviorSubject<RepeatMode> _repeatModeController =
+      BehaviorSubject.seeded(RepeatMode.off);
+  final BehaviorSubject<bool> _shuffleModeController =
+      BehaviorSubject.seeded(false);
   final BehaviorSubject<Duration?> _sleepTimer = BehaviorSubject.seeded(null);
-  final BehaviorSubject<LoopMode> _loopModeController = 
-      BehaviorSubject.seeded(LoopMode.off);
   Timer? _sleepTimerInstance;
+  bool _hasCompletedOneRepeatForRepeatOnce = false; // Flag for RepeatMode.repeatOnce logic
 
   Stream<PlayerState> get playerStateStream => _audioPlayer.playerStateStream;
   Stream<Duration> get positionStream => _audioPlayer.positionStream;
   Stream<Duration?> get durationStream => _audioPlayer.durationStream;
-  Stream<PlaybackMode> get playbackModeStream => _playbackMode.stream;
+  Stream<RepeatMode> get repeatModeStream => _repeatModeController.stream;
+  Stream<bool> get shuffleModeStream => _shuffleModeController.stream;
   Stream<List<AudioTrack>> get playlistStream => _playlist.stream;
   Stream<Duration?> get sleepTimerStream => _sleepTimer.stream;
-  Stream<LoopMode> get loopModeStream => _loopModeController.stream;
 
   bool get isPlaying => _audioPlayer.playing;
   Duration? get duration => _audioPlayer.duration;
   Duration get position => _audioPlayer.position;
-  LoopMode get currentLoopMode => _audioPlayer.loopMode; // Get current loop mode directly
   AudioTrack? get currentTrack => _currentTrack;
+  RepeatMode get currentRepeatMode => _repeatModeController.value;
+  bool get isShuffling => _shuffleModeController.value;
 
   AudioTrack? _currentTrack;
   List<AudioTrack> _originalPlaylist = [];
@@ -40,37 +42,40 @@ class AudioPlayerService {
         _onTrackComplete();
       }
     });
-
-    // Listen to the player's loop mode changes
-    _audioPlayer.loopModeStream.listen((loopMode) {
-      _loopModeController.add(loopMode); // Update our stream
-      if (loopMode == LoopMode.off && _playbackMode.value == PlaybackMode.repeat) {
-        // If player turned off loop (e.g., after LoopMode.one completed) and our mode was 'repeat', revert our mode.
-        _playbackMode.add(PlaybackMode.normal);
-      }
-    });
   }
 
   Future<void> setPlaylist(List<AudioTrack> tracks) async {
     _originalPlaylist = List.from(tracks);
     _shuffledPlaylist = List.from(tracks)..shuffle();
-    _playlist.add(_playbackMode.value == PlaybackMode.shuffle
+    _playlist.add(_shuffleModeController.value
         ? _shuffledPlaylist
         : _originalPlaylist);
   }
 
-  Future<void> play(AudioTrack track) async {
+  Future<void> play(AudioTrack track, {bool isInternalRepeatOnceContinuation = false}) async {
+    final bool isDifferentTrack = _currentTrack?.id != track.id;
     _currentTrack = track;
-    final isDifferentTrack = _currentTrack?.id != track.id;
 
-    // If playing a new track and LoopMode.one was active for the previous track, turn it off.
-    if (isDifferentTrack && _audioPlayer.loopMode == LoopMode.one) {
-      await _audioPlayer.setLoopMode(LoopMode.off);
-      // _loopModeController will be updated by the stream listener above
-      if (_playbackMode.value == PlaybackMode.repeat) {
-         _playbackMode.add(PlaybackMode.normal); // Our internal mode should also reset
+    if (isDifferentTrack) {
+      _hasCompletedOneRepeatForRepeatOnce = false; // Reset for new track
+      // If user manually changed track (not an internal repeatOnce call)
+      // and mode was repeatOnce, revert repeat to off.
+      if (!isInternalRepeatOnceContinuation && _repeatModeController.value == RepeatMode.repeatOnce) {
+        _repeatModeController.add(RepeatMode.off);
       }
+      // Note: RepeatMode.repeatCurrent persists for the new track if it was active.
     }
+
+    // Set just_audio's loopMode based on our RepeatMode
+    if (_repeatModeController.value == RepeatMode.repeatCurrent) {
+      await _audioPlayer.setLoopMode(LoopMode.one);
+    } else { 
+      // For RepeatMode.off or the initial play of RepeatMode.repeatOnce,
+      // or the second play of RepeatMode.repeatOnce (where it then transitions to off).
+      // The _onTrackComplete logic handles the transition for repeatOnce.
+      await _audioPlayer.setLoopMode(LoopMode.off);
+    }
+
     await _audioPlayer.setAudioSource(
       AudioSource.uri(
         Uri.parse(track.audioUrl),
@@ -99,56 +104,74 @@ class AudioPlayerService {
   Future<void> stop() async {
     _currentTrack = null;
     await _audioPlayer.stop();
-    _playbackMode.add(PlaybackMode.normal);
+    _repeatModeController.add(RepeatMode.off);
+    _hasCompletedOneRepeatForRepeatOnce = false;
+    await _audioPlayer.setLoopMode(LoopMode.off);
   }
 
-  Future<void> togglePlaybackMode(PlaybackMode mode) async {
-    if (mode == PlaybackMode.shuffle) {
-      if (_playbackMode.value == PlaybackMode.shuffle) {
-        // Turn off shuffle
-        _playbackMode.add(PlaybackMode.normal);
-        _playlist.add(_originalPlaylist);
-        // Consider if _audioPlayer.setShuffleModeEnabled(false) is needed if using ConcatenatingAudioSource with shuffleOrder
-      } else {
-        // Turn on shuffle
-        _playbackMode.add(PlaybackMode.shuffle);
-        _shuffledPlaylist = List.from(_originalPlaylist)..shuffle();
-        _playlist.add(_shuffledPlaylist);
-        await _audioPlayer.setLoopMode(LoopMode.off); // Shuffle overrides repeat track
-        // _loopModeController updated by stream listener
-      }
-    } else if (mode == PlaybackMode.repeat) {
-      if (_audioPlayer.loopMode == LoopMode.one) {
-        // Turn off repeat track
-        await _audioPlayer.setLoopMode(LoopMode.off);
-        _playbackMode.add(PlaybackMode.normal); // Our internal mode also reverts
-      } else {
-        // Turn on repeat track (once)
-        await _audioPlayer.setLoopMode(LoopMode.one);
-        _playbackMode.add(PlaybackMode.repeat); // Set our internal mode
-        // If shuffle was on, turn it off as repeat track takes precedence
-        if (_playbackMode.value == PlaybackMode.shuffle) _playlist.add(_originalPlaylist);
-      }
+  Future<void> cycleRepeatMode() async {
+    RepeatMode currentMode = _repeatModeController.value;
+    RepeatMode nextMode;
+
+    _hasCompletedOneRepeatForRepeatOnce = false; // Reset this flag on any manual mode change
+
+    if (currentMode == RepeatMode.off) {
+      nextMode = RepeatMode.repeatOnce;
+      // LoopMode.off is appropriate for the first play of repeatOnce.
+      // _onTrackComplete will handle the repeat.
+      if (_currentTrack != null) await _audioPlayer.setLoopMode(LoopMode.off);
+    } else if (currentMode == RepeatMode.repeatOnce) {
+      nextMode = RepeatMode.repeatCurrent;
+      if (_currentTrack != null) await _audioPlayer.setLoopMode(LoopMode.one);
+    } else { // RepeatMode.repeatCurrent
+      nextMode = RepeatMode.off;
+      if (_currentTrack != null) await _audioPlayer.setLoopMode(LoopMode.off);
     }
+    _repeatModeController.add(nextMode);
+  }
+
+  Future<void> toggleShuffleMode() async {
+    final newShuffleState = !_shuffleModeController.value;
+    _shuffleModeController.add(newShuffleState);
+    _playlist.add(newShuffleState ? _shuffledPlaylist : _originalPlaylist);
+    // If a track is currently playing, its playback continues.
+    // The change affects the "next" track selection.
   }
 
   Future<void> playNext() async {
     if (_currentTrack == null) return;
-    final currentList = _playbackMode.value == PlaybackMode.shuffle
+
+    // If user manually skips next while in repeatOnce, cancel the repeatOnce behavior
+    if (_repeatModeController.value == RepeatMode.repeatOnce) {
+      _repeatModeController.add(RepeatMode.off);
+    }
+    _hasCompletedOneRepeatForRepeatOnce = false; // Reset flag for any new track
+
+    final currentList = _shuffleModeController.value
         ? _shuffledPlaylist
         : _originalPlaylist;
     final currentIndex =
         currentList.indexWhere((track) => track.id == _currentTrack!.id);
+    
+    if (currentList.isEmpty) return;
+
     if (currentIndex < currentList.length - 1) {
       await play(currentList[currentIndex + 1]);
     } else {
-      await play(currentList[0]);
+      await play(currentList[0]); // Loop to start of playlist
     }
   }
 
   Future<void> playPrevious() async {
     if (_currentTrack == null) return;
-    final currentList = _playbackMode.value == PlaybackMode.shuffle
+
+    // If user manually skips previous while in repeatOnce, cancel the repeatOnce behavior
+    if (_repeatModeController.value == RepeatMode.repeatOnce) {
+      _repeatModeController.add(RepeatMode.off);
+    }
+    _hasCompletedOneRepeatForRepeatOnce = false; // Reset flag for any new track
+
+    final currentList = _shuffleModeController.value
         ? _shuffledPlaylist
         : _originalPlaylist;
     final currentIndex =
@@ -177,16 +200,31 @@ class AudioPlayerService {
   Future<void> _onTrackComplete() async {
     if (_currentTrack == null) return;
 
-    if (_audioPlayer.loopMode != LoopMode.one) { 
+    if (_repeatModeController.value == RepeatMode.repeatOnce) {
+      if (!_hasCompletedOneRepeatForRepeatOnce) {
+        _hasCompletedOneRepeatForRepeatOnce = true;
+        // Replay current track. LoopMode should be off for this play.
+        await play(_currentTrack!, isInternalRepeatOnceContinuation: true);
+      } else {
+        // Finished the single repeat
+        _hasCompletedOneRepeatForRepeatOnce = false;
+        _repeatModeController.add(RepeatMode.off); // Revert to normal mode
+        await playNext(); // Proceed to next track
+      }
+    } else if (_repeatModeController.value == RepeatMode.repeatCurrent) {
+      // just_audio with LoopMode.one handles this. Player loops automatically.
+      // No explicit action needed here.
+    } else { // RepeatMode.off
       await playNext();
     }
   }
 
   List<AudioTrack> getUpNextTracks() {
     if (_currentTrack == null) return [];
-    final currentList = _playbackMode.value == PlaybackMode.shuffle
-        ? _shuffledPlaylist
-        : _originalPlaylist;
+   final currentList =
+        _shuffleModeController.value // Use the new shuffle controller
+            ? _shuffledPlaylist
+            : _originalPlaylist;
     final currentIndex =
         currentList.indexWhere((track) => track.id == _currentTrack!.id);
     if (currentIndex == -1 || currentIndex == currentList.length - 1) {
@@ -198,9 +236,9 @@ class AudioPlayerService {
   Future<void> dispose() async {
     await _audioPlayer.dispose();
     await _playlist.close();
-    await _playbackMode.close();
+    await _repeatModeController.close();
+    await _shuffleModeController.close();
     await _sleepTimer.close();
-    await _loopModeController.close();
     _sleepTimerInstance?.cancel();
   }
 }

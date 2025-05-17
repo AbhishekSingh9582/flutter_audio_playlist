@@ -21,23 +21,13 @@ class AppCachedNetworkImage extends StatelessWidget {
     return CachedNetworkImage(
       fit: fit ?? BoxFit.fill,
       imageUrl: url,
-      imageBuilder: (context, imageProvider) => Container(
-        height: height ?? 171,
-        width: width ?? 171,
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(16),
-          color: Colors.black,
-          image: DecorationImage(
-            image: imageProvider,
-            fit: BoxFit.fill,
-          ),
-        ),
-      ),
+      height: height,
+      width: width,
       placeholder: (context, url) => RectangularShimmer(
         height: height ?? 171,
         width: width ?? 171,
       ),
-      errorWidget: (context, url, error) => SizedBox(
+      errorWidget: (context, url, error) => const SizedBox(
         height: 171,
         width: 171,
         child: Icon(Icons.error),

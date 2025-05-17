@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_audio_playlist/src/enums/playback_mode.dart';
-import 'package:just_audio/just_audio.dart'; // Import for LoopMode
+import 'package:flutter_audio_playlist/src/enums/repeat_mode.dart'; // Updated import
+// import 'package:just_audio/just_audio.dart'; // No longer needed here
 import '../services/audio_player_service.dart';
 import '../models/audio_track.dart';
 
@@ -11,7 +11,8 @@ class AudioPlaylistProvider with ChangeNotifier {
   bool _isPlaying = false;
   Duration _position = Duration.zero;
   Duration? _totalDuration;
-  PlaybackMode _playbackMode = PlaybackMode.normal;
+  RepeatMode _repeatMode = RepeatMode.off;
+  bool _isShuffling = false;
   Duration? _sleepTimer;
   List<AudioTrack> _upNextTracks = [];
 
@@ -31,13 +32,15 @@ class AudioPlaylistProvider with ChangeNotifier {
       _totalDuration = duration;
       notifyListeners();
     });
-    _audioPlayerService.playbackModeStream.listen((mode) {
-      _playbackMode = mode;
+    _audioPlayerService.repeatModeStream.listen((mode) {
+      _repeatMode = mode;
       _upNextTracks = _audioPlayerService.getUpNextTracks();
       notifyListeners();
     });
-     _audioPlayerService.loopModeStream.listen((loopMode) {
-      notifyListeners(); 
+    _audioPlayerService.shuffleModeStream.listen((isShuffling) {
+      _isShuffling = isShuffling;
+      _upNextTracks = _audioPlayerService.getUpNextTracks(); // Up next depends on shuffle
+      notifyListeners();
     });
     _audioPlayerService.sleepTimerStream.listen((timer) {
       _sleepTimer = timer;
@@ -50,11 +53,10 @@ class AudioPlaylistProvider with ChangeNotifier {
   bool get isPlaying => _isPlaying;
   Duration get position => _position;
   Duration? get totalDuration => _totalDuration;
-  PlaybackMode get playbackMode => _playbackMode;
+  RepeatMode get repeatMode => _repeatMode;
+  bool get isShuffling => _isShuffling;
   Duration? get sleepTimer => _sleepTimer;
   List<AudioTrack> get upNextTracks => _upNextTracks;
-  Stream<LoopMode> get loopModeStream => _audioPlayerService.loopModeStream;
-  LoopMode get currentLoopMode => _audioPlayerService.currentLoopMode;
 
   Future<void> setTracks(List<AudioTrack> tracks) async {
     _tracks = tracks;
@@ -86,8 +88,12 @@ class AudioPlaylistProvider with ChangeNotifier {
     await _audioPlayerService.playPrevious();
   }
 
-  Future<void> togglePlaybackMode(PlaybackMode mode) async {
-    await _audioPlayerService.togglePlaybackMode(mode);
+  Future<void> cycleRepeatMode() async {
+    await _audioPlayerService.cycleRepeatMode();
+  }
+
+  Future<void> toggleShuffleMode() async {
+    await _audioPlayerService.toggleShuffleMode();
   }
 
   void setSleepTimer(Duration duration) {

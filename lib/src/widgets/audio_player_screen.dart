@@ -1,12 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_audio_playlist/src/utils/extension.dart';
 import 'package:flutter_audio_playlist/src/widgets/app_cached_network.dart';
-import 'package:just_audio/just_audio.dart';
 import 'package:provider/provider.dart';
 import '../providers/audio_playlist_provider.dart';
-import '../models/audio_track.dart'; 
+import '../models/audio_track.dart';
 import '../utils/format_duration.dart';
-import '../enums/playback_mode.dart';
+import '../enums/repeat_mode.dart';
 
 class AudioPlayerScreen extends StatefulWidget {
   final Widget? customPlayerScreen;
@@ -38,10 +37,8 @@ class _AudioPlayerScreenState extends State<AudioPlayerScreen> {
   void _showSleepTimerBottomSheet(
       BuildContext modalContext, AudioPlaylistProvider providerForActions) {
     showModalBottomSheet(
-      context: modalContext, // Use the context from where the sheet is launched
+      context: modalContext,
       builder: (bottomSheetBuilderContext) {
-        // providerForActions is used to call methods like setSleepTimer, cancelSleepTimer
-        // For displaying reactive data like the current sleep timer value, use Selector
         return Container(
           padding: const EdgeInsets.all(16),
           child: Column(
@@ -53,7 +50,9 @@ class _AudioPlayerScreenState extends State<AudioPlayerScreen> {
                   if (sleepTimerValue != null) {
                     return Padding(
                       padding: const EdgeInsets.only(bottom: 8.0),
-                      child: Text('Time left: ${formatDuration(sleepTimerValue)}', style: const TextStyle(fontWeight: FontWeight.bold)),
+                      child: Text(
+                          'Time left: ${formatDuration(sleepTimerValue)}',
+                          style: const TextStyle(fontWeight: FontWeight.bold)),
                     );
                   }
                   return const SizedBox.shrink();
@@ -67,19 +66,19 @@ class _AudioPlayerScreenState extends State<AudioPlayerScreen> {
                     },
                   )),
               Selector<AudioPlaylistProvider, Duration?>(
-                selector: (_, p) => p.sleepTimer,
-                builder: (_, sleepTimerValue, __) {
-                  if (sleepTimerValue != null) {
-                    return TextButton(
-                      onPressed: () {
-                        providerForActions.cancelSleepTimer();
-                        Navigator.pop(bottomSheetBuilderContext);
-                      },
-                      child: const Text('Cancel Timer'),
-                    );
-                  }
-                  return const SizedBox.shrink();
-                }),
+                  selector: (_, p) => p.sleepTimer,
+                  builder: (_, sleepTimerValue, __) {
+                    if (sleepTimerValue != null) {
+                      return TextButton(
+                        onPressed: () {
+                          providerForActions.cancelSleepTimer();
+                          Navigator.pop(bottomSheetBuilderContext);
+                        },
+                        child: const Text('Cancel Timer'),
+                      );
+                    }
+                    return const SizedBox.shrink();
+                  }),
             ],
           ),
         );
@@ -92,8 +91,6 @@ class _AudioPlayerScreenState extends State<AudioPlayerScreen> {
     if (widget.customPlayerScreen != null) return widget.customPlayerScreen!;
     final width = MediaQuery.of(context).size.width;
 
-    // Use Selector to rebuild the core player UI only when currentTrack changes.
-    // Other changes (like position) won't cause this Selector's builder to run.
     return Selector<AudioPlaylistProvider, AudioTrack?>(
       selector: (_, provider) => provider.currentTrack,
       builder: (context, currentTrack, child) {
@@ -103,8 +100,6 @@ class _AudioPlayerScreenState extends State<AudioPlayerScreen> {
           );
         }
 
-        // Get the provider instance for actions (like showing bottom sheet).
-        // context.read is safe here because Selector handles the rebuild logic.
         final audioProviderForActions = context.read<AudioPlaylistProvider>();
 
         return _AudioPlayerScreenBody(
@@ -113,7 +108,9 @@ class _AudioPlayerScreenState extends State<AudioPlayerScreen> {
           enableRepeat: widget.enableRepeat,
           enableSleepTimer: widget.enableSleepTimer,
           enableUpNext: widget.enableUpNext,
-          showSleepTimerBottomSheet: (bottomSheetLauncherContext) => _showSleepTimerBottomSheet(bottomSheetLauncherContext, audioProviderForActions),
+          showSleepTimerBottomSheet: (bottomSheetLauncherContext) =>
+              _showSleepTimerBottomSheet(
+                  bottomSheetLauncherContext, audioProviderForActions),
         );
       },
     );
@@ -288,13 +285,13 @@ class _ControlsSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    
-    final playbackMode = context
-        .select<AudioPlaylistProvider, PlaybackMode>((p) => p.playbackMode);
+    final repeatMode =
+        context.select<AudioPlaylistProvider, RepeatMode>((p) => p.repeatMode);
     final isPlaying =
         context.select<AudioPlaylistProvider, bool>((p) => p.isPlaying);
-    final audioProvider =
-        context.read<AudioPlaylistProvider>(); 
+    final isShuffling =
+        context.select<AudioPlaylistProvider, bool>((p) => p.isShuffling);
+    final audioProvider = context.read<AudioPlaylistProvider>();
 
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 10.0),
@@ -305,16 +302,14 @@ class _ControlsSection extends StatelessWidget {
             IconButton(
               icon: Icon(
                 Icons.shuffle,
-                color: playbackMode == PlaybackMode.shuffle
+                color: isShuffling
                     ? Theme.of(context).colorScheme.primary
                     : Colors.grey,
               ),
-              onPressed: () =>
-                  audioProvider.togglePlaybackMode(PlaybackMode.shuffle),
+              onPressed: audioProvider.toggleShuffleMode,
             )
           else
             const SizedBox(width: 48),
-
           IconButton(
             icon: const Icon(Icons.skip_previous),
             iconSize: 36,
@@ -331,8 +326,7 @@ class _ControlsSection extends StatelessWidget {
                 isPlaying
                     ? Icons.pause_circle_filled
                     : Icons.play_circle_filled,
-                key:
-                    ValueKey<bool>(isPlaying), 
+                key: ValueKey<bool>(isPlaying),
               ),
             ),
             onPressed: audioProvider.togglePlayPause,
@@ -343,24 +337,32 @@ class _ControlsSection extends StatelessWidget {
             onPressed: audioProvider.playNext,
           ),
           if (enableRepeat)
-            StreamBuilder<LoopMode>(
-                stream: audioProvider.loopModeStream,
-                initialData: audioProvider.currentLoopMode,
-                builder: (context, snapshot) {
-                  final loopMode = snapshot.data ?? LoopMode.off;
-                  return IconButton(
-                    icon: Icon(
-                      loopMode == LoopMode.one
-                          ? Icons.repeat_one
-                          : Icons.repeat,
-                      color: loopMode == LoopMode.one ? Theme.of(context).colorScheme.primary : Colors.grey,
-                    ),
-                    onPressed: () =>
-                        audioProvider.togglePlaybackMode(PlaybackMode.repeat),
-                  );
-                })
+            Builder(builder: (context) {
+              // Use Builder to get context for Theme
+              IconData icon;
+              Color color;
+              switch (repeatMode) {
+                case RepeatMode.off:
+                  icon = Icons.repeat;
+                  color = Colors.grey;
+                  break;
+                case RepeatMode.repeatOnce:
+                  icon = Icons.repeat_one;
+                  color = Theme.of(context).colorScheme.primary;
+                  break;
+                case RepeatMode.repeatCurrent:
+                  icon = Icons
+                      .repeat_on; // Consider Icons.repeat if Icons.repeat_on is not available/preferred
+                  color = Theme.of(context).colorScheme.primary;
+                  break;
+              }
+              return IconButton(
+                icon: Icon(icon, color: color),
+                onPressed: audioProvider.cycleRepeatMode,
+              );
+            })
           else
-            const SizedBox(width: 48), 
+            const SizedBox(width: 48),
         ],
       ),
     );
@@ -392,8 +394,7 @@ class _UpNextSection extends StatelessWidget {
           ),
           10.toVerticalSizedBox,
           SizedBox(
-            height:
-                120, 
+            height: 150,
             child: ListView.builder(
               scrollDirection: Axis.horizontal,
               itemCount: upNextTracks.length,
@@ -409,7 +410,7 @@ class _UpNextSection extends StatelessWidget {
                     onTap: () => provider.playTrack(track),
                     borderRadius: BorderRadius.circular(10),
                     child: SizedBox(
-                      width: 100, 
+                      width: 100,
                       child: Padding(
                         padding: const EdgeInsets.all(8.0),
                         child: Column(
