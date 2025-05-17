@@ -1,19 +1,17 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_audio_playlist/flutter_video_playlist.dart';
+import 'package:provider/provider.dart';
 import '../models/audio_track.dart';
 
 class AudioTile extends StatelessWidget {
   final AudioTrack track;
-  final bool isPlaying;
-  final double progress;
-  final VoidCallback onTap;
+  final VoidCallback? onTap;
   final Widget? customTile;
 
   const AudioTile({
     super.key,
     required this.track,
-    required this.isPlaying,
-    required this.progress,
-    required this.onTap,
+     this.onTap,
     this.customTile,
   });
 
@@ -22,7 +20,13 @@ class AudioTile extends StatelessWidget {
     if (customTile != null) return customTile!;
 
     return InkWell(
-      onTap: onTap,
+      onTap: onTap ?? () {
+        if (context.read<AudioPlaylistProvider>().currentTrack?.id == track.id) {
+          context.read<AudioPlaylistProvider>().togglePlayPause();
+        } else {
+          context.read<AudioPlaylistProvider>().playTrack(track);
+        }
+      },
       child: Padding(
         padding: const EdgeInsets.symmetric(vertical: 8.0, horizontal: 16.0),
         child: Row(
@@ -57,21 +61,37 @@ class AudioTile extends StatelessWidget {
             Stack(
               alignment: Alignment.center,
               children: [
-                SizedBox(
-                  width: 40,
-                  height: 40,
-                  child: CircularProgressIndicator(
-                    value: progress,
-                    backgroundColor: Colors.grey[300],
-                    valueColor:
-                        const AlwaysStoppedAnimation<Color>(Colors.blue),
-                  ),
-                ),
-                Icon(
-                  isPlaying ? Icons.pause_rounded : Icons.play_arrow_rounded,
-                  color: Colors.blue,
-                  size: 24.0,
-                ),
+                Consumer<AudioPlaylistProvider>(
+                    builder: (context, audioPlaylistProvier, child) {
+                  return SizedBox(
+                    width: 40,
+                    height: 40,
+                    child: CircularProgressIndicator(
+                      value: audioPlaylistProvier.currentTrack?.id == track.id
+                          ? audioPlaylistProvier.position.inMilliseconds /
+                              (audioPlaylistProvier
+                                      .totalDuration?.inMilliseconds ??
+                                  1)
+                          : 0,
+                      backgroundColor: Colors.grey[300],
+                      valueColor:
+                          const AlwaysStoppedAnimation<Color>(Colors.blue),
+                    ),
+                  );
+                }),
+                Selector<AudioPlaylistProvider, bool>(
+                    selector: (_, provider) =>
+                        provider.isPlaying &&
+                        provider.currentTrack?.id == track.id,
+                    builder: (context, isPlaying, child) {
+                      return Icon(
+                        isPlaying
+                            ? Icons.pause_rounded
+                            : Icons.play_arrow_rounded,
+                        color: Colors.blue,
+                        size: 24.0,
+                      );
+                    }),
               ],
             ),
           ],

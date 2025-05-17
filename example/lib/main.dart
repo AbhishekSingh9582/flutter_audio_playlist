@@ -72,7 +72,7 @@ class PlaylistScreen extends StatelessWidget {
             'https://d1ass895x5m7xs.cloudfront.net/Test/music-pic/Lingastkam.jpg',
         duration: const Duration(minutes: 3),
       ),
-         AudioTrack(
+      AudioTrack(
         id: '4',
         title: 'Sample Track 4',
         subtitle: '2:57',
@@ -82,7 +82,7 @@ class PlaylistScreen extends StatelessWidget {
             'https://d1ass895x5m7xs.cloudfront.net/Test/music-pic/namastasya+namo+namah.jpg',
         duration: const Duration(minutes: 3),
       ),
-       AudioTrack(
+      AudioTrack(
         id: '5',
         title: 'Sample Track 5',
         subtitle: '2:57',
@@ -109,13 +109,6 @@ class PlaylistScreen extends StatelessWidget {
                     final track = provider.tracks[index];
                     return AudioTile(
                       track: track,
-                      isPlaying: provider.currentTrack?.id == track.id &&
-                          provider.isPlaying,
-                      progress: provider.currentTrack?.id == track.id
-                          ? provider.position.inMilliseconds /
-                              (provider.totalDuration?.inMilliseconds ?? 1)
-                          : 0,
-                      onTap: () => provider.playTrack(track),
                     );
                   },
                 );
