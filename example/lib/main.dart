@@ -55,7 +55,7 @@ class PlaylistScreen extends StatelessWidget {
       AudioTrack(
         id: '2',
         title: 'Sample Track 2',
-        subtitle: '1:45',
+        subtitle: 'AR Rahman',
         audioUrl:
             'https://d1ass895x5m7xs.cloudfront.net/Test/music/hare+krishna+hare+rama+FINAL+MASTER+4.wav',
         imageUrl:
@@ -65,7 +65,7 @@ class PlaylistScreen extends StatelessWidget {
       AudioTrack(
         id: '3',
         title: 'Sample Track 3',
-        subtitle: '2:57',
+        subtitle: 'Eminem',
         audioUrl:
             'https://d1ass895x5m7xs.cloudfront.net/Test/music/lingashtakam+final+1.wav',
         imageUrl:
@@ -75,7 +75,7 @@ class PlaylistScreen extends StatelessWidget {
       AudioTrack(
         id: '4',
         title: 'Sample Track 4',
-        subtitle: '2:57',
+        subtitle: 'Arijit Singh',
         audioUrl:
             'https://d1ass895x5m7xs.cloudfront.net/Test/music/nemastasya+namoh+nmaah+final+mater+2.wav',
         imageUrl:
@@ -85,7 +85,7 @@ class PlaylistScreen extends StatelessWidget {
       AudioTrack(
         id: '5',
         title: 'Sample Track 5',
-        subtitle: '2:57',
+        subtitle: 'Adnan Sami',
         audioUrl:
             'https://d1ass895x5m7xs.cloudfront.net/Test/music/Daridrya+Dukh+dahana+shiva+stotram+final+master.wav',
         imageUrl:
@@ -101,13 +101,22 @@ class PlaylistScreen extends StatelessWidget {
       body: Column(
         children: [
           Expanded(
-            child: Consumer<AudioPlaylistProvider>(
-              builder: (context, provider, child) {
+            // Use Selector to only rebuild the ListView when the tracks list itself changes.
+            // Individual AudioTiles will manage their own state updates.
+            child: Selector<AudioPlaylistProvider, List<AudioTrack>>(
+              selector: (_, provider) => provider.tracks,
+              shouldRebuild: (previous, next) => previous.length != next.length,
+              builder: (context, tracks, child) {
+                if (tracks.isEmpty) {
+                  return const Center(child: Text("No tracks available."));
+                }
                 return ListView.builder(
-                  itemCount: provider.tracks.length,
+                  itemCount: tracks.length,
                   itemBuilder: (context, index) {
-                    final track = provider.tracks[index];
+                    final track = tracks[index];
+
                     return AudioTile(
+                      key: ValueKey(track.id),
                       track: track,
                     );
                   },

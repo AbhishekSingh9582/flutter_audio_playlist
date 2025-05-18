@@ -23,10 +23,12 @@ class AppCachedNetworkImage extends StatelessWidget {
       imageUrl: url,
       height: height,
       width: width,
-      placeholder: (context, url) => RectangularShimmer(
-        height: height ?? 171,
-        width: width ?? 171,
-      ),
+      placeholder: (context, url) {
+        return RectangularShimmer(
+          height: height ?? 171,
+          width: width ?? 171,
+        );
+      },
       errorWidget: (context, url, error) => const SizedBox(
         height: 171,
         width: 171,
