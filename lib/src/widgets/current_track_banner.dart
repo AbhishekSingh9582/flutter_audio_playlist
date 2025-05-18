@@ -17,7 +17,7 @@ class CurrentTrackBanner extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final provider = Provider.of<AudioPlaylistProvider>(context);
+    final provider = context.watch<AudioPlaylistProvider>();
     if (provider.currentTrack == null) return const SizedBox.shrink();
     if (hideOnPlayerScreen &&
         ModalRoute.of(context)?.settings.name == playerScreenRoute) {
@@ -26,13 +26,18 @@ class CurrentTrackBanner extends StatelessWidget {
 
     if (customBanner != null) return customBanner!;
 
+    final dominantColor = provider.currentTrackDominantColor;
+    final bannerColor = dominantColor ?? Colors.blue[50];
+    final textColor = dominantColor != null && dominantColor.computeLuminance() < 0.5 ? Colors.white : Colors.black;
+    final iconColor = dominantColor != null && dominantColor.computeLuminance() < 0.5 ? Colors.white70 : Colors.blue;
+
     return GestureDetector(
       onTap: () => Navigator.pushNamed(context, playerScreenRoute),
       child: Container(
         padding: const EdgeInsets.all(8),
         margin: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: Colors.blue[50],
+          color: bannerColor,
           borderRadius: BorderRadius.circular(8),
         ),
         child: Row(
@@ -52,8 +57,8 @@ class CurrentTrackBanner extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    provider.currentTrack!.title,
-                    style: const TextStyle(fontWeight: FontWeight.bold),
+                    provider.currentTrack!.title, // Consider textColor here
+                    style: TextStyle(fontWeight: FontWeight.bold, color: textColor),
                     maxLines: 1,
                   ),
                   if (provider.position != null &&
@@ -61,26 +66,26 @@ class CurrentTrackBanner extends StatelessWidget {
                     LinearProgressIndicator(
                       value: provider.position.inMilliseconds /
                           (provider.totalDuration!.inMilliseconds + 1),
-                      backgroundColor: Colors.grey[300],
+                      backgroundColor: textColor.withOpacity(0.3),
                       valueColor:
-                          const AlwaysStoppedAnimation<Color>(Colors.blue),
+                           AlwaysStoppedAnimation<Color>(iconColor),
                     ),
                 ],
               ),
             ),
             Text(
               '${formatDuration(provider.position)} / ${formatDuration(provider.totalDuration ?? Duration.zero)}',
-              style: const TextStyle(fontSize: 12),
+              style: TextStyle(fontSize: 12, color: textColor.withOpacity(0.8)),
             ),
             IconButton(
               icon: Icon(
                 provider.isPlaying ? Icons.pause : Icons.play_arrow,
-                color: Colors.blue,
+                color: iconColor,
               ),
               onPressed: provider.togglePlayPause,
             ),
             IconButton(
-              icon: const Icon(Icons.close),
+              icon: Icon(Icons.close, color: iconColor.withOpacity(0.7)),
               onPressed: provider.stop,
             ),
           ],

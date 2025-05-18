@@ -134,8 +134,6 @@ class AudioPlayerService {
     final newShuffleState = !_shuffleModeController.value;
     _shuffleModeController.add(newShuffleState);
     _playlist.add(newShuffleState ? _shuffledPlaylist : _originalPlaylist);
-    // If a track is currently playing, its playback continues.
-    // The change affects the "next" track selection.
   }
 
   Future<void> playNext() async {

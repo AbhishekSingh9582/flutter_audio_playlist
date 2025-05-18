@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_audio_playlist/src/enums/repeat_mode.dart'; // Updated import
+import 'package:palette_generator/palette_generator.dart';
+// import 'package:palette_generator/palette_generator.dart';
 // import 'package:just_audio/just_audio.dart'; // No longer needed here
 import '../services/audio_player_service.dart';
 import '../models/audio_track.dart';
@@ -15,12 +17,17 @@ class AudioPlaylistProvider with ChangeNotifier {
   bool _isShuffling = false;
   Duration? _sleepTimer;
   List<AudioTrack> _upNextTracks = [];
+  Color? _currentTrackDominantColor;
 
   AudioPlaylistProvider() {
     _audioPlayerService.init();
     _audioPlayerService.playerStateStream.listen((state) {
       _isPlaying = state.playing;
-      _currentTrack = _audioPlayerService.currentTrack;
+      final newTrack = _audioPlayerService.currentTrack;
+      if (_currentTrack?.id != newTrack?.id) {
+        _currentTrack = newTrack;
+        _updateDominantColor(_currentTrack);
+      }
       _upNextTracks = _audioPlayerService.getUpNextTracks();
       notifyListeners();
     });
@@ -57,6 +64,7 @@ class AudioPlaylistProvider with ChangeNotifier {
   bool get isShuffling => _isShuffling;
   Duration? get sleepTimer => _sleepTimer;
   List<AudioTrack> get upNextTracks => _upNextTracks;
+  Color? get currentTrackDominantColor => _currentTrackDominantColor;
 
   Future<void> setTracks(List<AudioTrack> tracks) async {
     _tracks = tracks;
@@ -66,6 +74,9 @@ class AudioPlaylistProvider with ChangeNotifier {
 
   Future<void> playTrack(AudioTrack track) async {
     await _audioPlayerService.play(track);
+    // The playerStateStream listener will handle _currentTrack update
+    // and trigger _updateDominantColor.
+    // If immediate color update is desired here, can call _updateDominantColor(track)
   }
 
   Future<void> togglePlayPause() async {
@@ -104,6 +115,23 @@ class AudioPlaylistProvider with ChangeNotifier {
     _audioPlayerService.cancelSleepTimer();
   }
 
+  Future<void> _updateDominantColor(AudioTrack? track) async {
+    if (track == null || track.imageUrl.isEmpty) {
+      _currentTrackDominantColor = null;
+      notifyListeners();
+      return;
+    }
+    try {
+      final PaletteGenerator paletteGenerator =
+          await PaletteGenerator.fromImageProvider(
+        NetworkImage(track.imageUrl),
+      );
+      _currentTrackDominantColor = paletteGenerator.dominantColor?.color;
+    } catch (e) {
+      _currentTrackDominantColor = null; // Reset on error
+    }
+    notifyListeners();
+  }
   @override
   void dispose() {
     _audioPlayerService.dispose();

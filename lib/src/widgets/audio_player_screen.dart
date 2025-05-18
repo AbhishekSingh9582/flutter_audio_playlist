@@ -137,49 +137,97 @@ class _AudioPlayerScreenBody extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final double statusBarHeight = MediaQuery.of(context).padding.top;
-    return Scaffold(
-      body: SingleChildScrollView(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            SizedBox(height: statusBarHeight),
-            Padding(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 20.0, vertical: 15),
-              child: InkWell(
-                onTap: () => Navigator.pop(context),
-                child: const Icon(Icons.arrow_back_ios_new),
-              ),
+    // Get the dominant color from the provider
+    final dominantColor = context.select<AudioPlaylistProvider, Color?>(
+        (p) => p.currentTrackDominantColor);
+
+    // Determine text/icon color based on background luminance for better contrast
+    final bool isDarkBackground =
+        (dominantColor?.computeLuminance() ?? 0.5) < 0.5;
+    final Color primaryContentColor =
+        isDarkBackground ? Colors.white : Colors.black87;
+    final Color secondaryContentColor =
+        isDarkBackground ? Colors.white70 : Colors.black54;
+
+    return Theme(
+      data: Theme.of(context).copyWith(
+        iconTheme:
+            Theme.of(context).iconTheme.copyWith(color: primaryContentColor),
+        textTheme: Theme.of(context).textTheme.apply(
+              bodyColor: primaryContentColor,
+              displayColor: primaryContentColor,
             ),
-            _TrackDetailsSection(
-              width: width,
-              enableSleepTimer: enableSleepTimer,
-              showSleepTimerBottomSheet: () =>
-                  showSleepTimerBottomSheet(context),
+      ),
+      child: Scaffold(
+        body: Container(
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              colors: [
+                dominantColor ?? Theme.of(context).scaffoldBackgroundColor,
+                Colors.black
+              ],
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              stops: const [
+                0.0,
+                0.8
+              ], // Adjust stops for desired transition speed
             ),
-            16.toVerticalSizedBox,
-            const _ProgressBarSection(),
-            _ControlsSection(
-              enableShuffle: enableShuffle,
-              enableRepeat: enableRepeat,
+          ),
+          child: SingleChildScrollView(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                SizedBox(height: statusBarHeight),
+                _buildBackButton(context, primaryContentColor),
+                _TrackDetailsSection(
+                    width: width,
+                    enableSleepTimer: enableSleepTimer,
+                    showSleepTimerBottomSheet: () =>
+                        showSleepTimerBottomSheet(context),
+                    primaryContentColor: primaryContentColor,
+                    secondaryContentColor: secondaryContentColor),
+                16.toVerticalSizedBox,
+                const _ProgressBarSection(), // Progress bar might need color adjustments too
+                _ControlsSection(
+                    enableShuffle: enableShuffle,
+                    enableRepeat: enableRepeat,
+                    primaryContentColor: primaryContentColor,
+                    secondaryContentColor: secondaryContentColor),
+                if (enableUpNext)
+                  _UpNextSection(secondaryContentColor: secondaryContentColor),
+              ],
             ),
-            if (enableUpNext) const _UpNextSection(),
-          ],
+          ),
         ),
       ),
     );
   }
 }
 
+Widget _buildBackButton(BuildContext context, Color iconColor) {
+  return Padding(
+    padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 15),
+    child: InkWell(
+      onTap: () => Navigator.pop(context),
+      child: Icon(Icons.arrow_back_ios_new, color: iconColor),
+    ),
+  );
+}
+
 class _TrackDetailsSection extends StatelessWidget {
   final double width;
   final bool enableSleepTimer;
   final VoidCallback showSleepTimerBottomSheet;
+  final Color primaryContentColor;
+  final Color secondaryContentColor;
 
   const _TrackDetailsSection({
     required this.width,
     required this.enableSleepTimer,
     required this.showSleepTimerBottomSheet,
+    required this.primaryContentColor,
+    required this.secondaryContentColor,
   });
 
   @override
@@ -213,14 +261,16 @@ class _TrackDetailsSection extends StatelessWidget {
                   children: [
                     Text(
                       currentTrack.title,
-                      style: const TextStyle(
-                          fontSize: 20, fontWeight: FontWeight.bold),
+                      style: TextStyle(
+                          fontSize: 20,
+                          fontWeight: FontWeight.bold,
+                          color: primaryContentColor),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                     ),
                     Text(
                       currentTrack.subtitle,
-                      style: const TextStyle(color: Colors.grey),
+                      style: TextStyle(color: secondaryContentColor),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                     ),
@@ -229,7 +279,7 @@ class _TrackDetailsSection extends StatelessWidget {
               ),
               if (enableSleepTimer)
                 IconButton(
-                  icon: const Icon(Icons.timer_outlined),
+                  icon: Icon(Icons.timer_outlined, color: primaryContentColor),
                   onPressed: showSleepTimerBottomSheet,
                 ),
             ],
@@ -250,24 +300,43 @@ class _ProgressBarSection extends StatelessWidget {
     final totalDuration = context
         .select<AudioPlaylistProvider, Duration?>((p) => p.totalDuration);
     final provider = context.read<AudioPlaylistProvider>();
+    final dominantColor = context.select<AudioPlaylistProvider, Color?>(
+        (p) => p.currentTrackDominantColor);
+    final bool isDarkBackground =
+        (dominantColor?.computeLuminance() ?? 0.5) < 0.5;
+    final Color activeSliderColor = isDarkBackground
+        ? Colors.white
+        : (dominantColor ?? Theme.of(context).colorScheme.primary);
+    final Color inactiveSliderColor =
+        isDarkBackground ? Colors.white38 : Colors.grey.shade300;
 
     return Column(
       children: [
-        Slider(
-          value: position.inMilliseconds
-              .toDouble()
-              .clamp(0.0, (totalDuration?.inMilliseconds ?? 1).toDouble()),
-          max: (totalDuration?.inMilliseconds ?? 1).toDouble(),
-          onChanged: (value) =>
-              provider.seek(Duration(milliseconds: value.toInt())),
+        SliderTheme(
+          data: SliderTheme.of(context).copyWith(
+            activeTrackColor: activeSliderColor,
+            inactiveTrackColor: inactiveSliderColor,
+            thumbColor: activeSliderColor,
+            overlayColor: activeSliderColor.withOpacity(0.2),
+          ),
+          child: Slider(
+            value: position.inMilliseconds
+                .toDouble()
+                .clamp(0.0, (totalDuration?.inMilliseconds ?? 1).toDouble()),
+            max: (totalDuration?.inMilliseconds ?? 1).toDouble(),
+            onChanged: (value) =>
+                provider.seek(Duration(milliseconds: value.toInt())),
+          ),
         ),
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 20),
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(formatDuration(position)),
-              Text(formatDuration(totalDuration ?? Duration.zero)),
+              Text(formatDuration(
+                  position)), // Text color will be inherited from Theme
+              Text(formatDuration(totalDuration ??
+                  Duration.zero)), // Text color will be inherited
             ],
           ),
         ),
@@ -279,9 +348,14 @@ class _ProgressBarSection extends StatelessWidget {
 class _ControlsSection extends StatelessWidget {
   final bool enableShuffle;
   final bool enableRepeat;
+  final Color primaryContentColor;
+  final Color secondaryContentColor;
 
   const _ControlsSection(
-      {required this.enableShuffle, required this.enableRepeat});
+      {required this.enableShuffle,
+      required this.enableRepeat,
+      required this.primaryContentColor,
+      required this.secondaryContentColor});
 
   @override
   Widget build(BuildContext context) {
@@ -292,6 +366,10 @@ class _ControlsSection extends StatelessWidget {
     final isShuffling =
         context.select<AudioPlaylistProvider, bool>((p) => p.isShuffling);
     final audioProvider = context.read<AudioPlaylistProvider>();
+    final dominantColor = context.select<AudioPlaylistProvider, Color?>(
+        (p) => p.currentTrackDominantColor);
+    final activeIconColor =
+        dominantColor ?? Theme.of(context).colorScheme.primary;
 
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 10.0),
@@ -302,16 +380,14 @@ class _ControlsSection extends StatelessWidget {
             IconButton(
               icon: Icon(
                 Icons.shuffle,
-                color: isShuffling
-                    ? Theme.of(context).colorScheme.primary
-                    : Colors.grey,
+                color: isShuffling ? activeIconColor : secondaryContentColor,
               ),
               onPressed: audioProvider.toggleShuffleMode,
             )
           else
             const SizedBox(width: 48),
           IconButton(
-            icon: const Icon(Icons.skip_previous),
+            icon: Icon(Icons.skip_previous, color: primaryContentColor),
             iconSize: 36,
             onPressed: audioProvider.playPrevious,
           ),
@@ -327,37 +403,36 @@ class _ControlsSection extends StatelessWidget {
                     ? Icons.pause_circle_filled
                     : Icons.play_circle_filled,
                 key: ValueKey<bool>(isPlaying),
+                color: primaryContentColor,
               ),
             ),
             onPressed: audioProvider.togglePlayPause,
           ),
           IconButton(
-            icon: const Icon(Icons.skip_next),
+            icon: Icon(Icons.skip_next, color: primaryContentColor),
             iconSize: 36,
             onPressed: audioProvider.playNext,
           ),
           if (enableRepeat)
             Builder(builder: (context) {
-              // Use Builder to get context for Theme
               IconData icon;
-              Color color;
+              Color iconColor;
               switch (repeatMode) {
                 case RepeatMode.off:
                   icon = Icons.repeat;
-                  color = Colors.grey;
+                  iconColor = secondaryContentColor;
                   break;
                 case RepeatMode.repeatOnce:
                   icon = Icons.repeat_one;
-                  color = Theme.of(context).colorScheme.primary;
+                  iconColor = activeIconColor;
                   break;
                 case RepeatMode.repeatCurrent:
-                  icon = Icons
-                      .repeat_on; // Consider Icons.repeat if Icons.repeat_on is not available/preferred
-                  color = Theme.of(context).colorScheme.primary;
+                  icon = Icons.repeat_on;
+                  iconColor = activeIconColor;
                   break;
               }
               return IconButton(
-                icon: Icon(icon, color: color),
+                icon: Icon(icon, color: iconColor),
                 onPressed: audioProvider.cycleRepeatMode,
               );
             })
@@ -370,7 +445,8 @@ class _ControlsSection extends StatelessWidget {
 }
 
 class _UpNextSection extends StatelessWidget {
-  const _UpNextSection();
+  final Color secondaryContentColor;
+  const _UpNextSection({required this.secondaryContentColor});
 
   @override
   Widget build(BuildContext context) {
@@ -387,6 +463,7 @@ class _UpNextSection extends StatelessWidget {
         children: [
           Text(
             'Up Next',
+            // Text color will be inherited from Theme in _AudioPlayerScreenBody
             style: Theme.of(context)
                 .textTheme
                 .titleMedium
@@ -402,6 +479,8 @@ class _UpNextSection extends StatelessWidget {
                 final track = upNextTracks[index];
                 return Card(
                   elevation: 2,
+                  color: secondaryContentColor
+                      .withOpacity(0.4), // Subtle background for cards
                   margin:
                       const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
                   shape: RoundedRectangleBorder(
@@ -428,6 +507,7 @@ class _UpNextSection extends StatelessWidget {
                             8.toVerticalSizedBox,
                             Text(
                               track.title,
+                              // Text color will be inherited
                               style: Theme.of(context).textTheme.bodySmall,
                               maxLines: 2,
                               textAlign: TextAlign.center,
