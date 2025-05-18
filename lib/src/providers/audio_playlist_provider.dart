@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_audio_playlist/src/enums/repeat_mode.dart'; // Updated import
-import 'package:palette_generator/palette_generator.dart';
+import 'package:flutter_audio_playlist/src/services/image_theme_service.dart';
 // import 'package:palette_generator/palette_generator.dart';
 // import 'package:just_audio/just_audio.dart'; // No longer needed here
 import '../services/audio_player_service.dart';
@@ -8,6 +8,7 @@ import '../models/audio_track.dart';
 
 class AudioPlaylistProvider with ChangeNotifier {
   final AudioPlayerService _audioPlayerService = AudioPlayerService();
+  final ImageThemeService _imageThemeService = ImageThemeService(); // Instantiate the service
   List<AudioTrack> _tracks = [];
   AudioTrack? _currentTrack;
   bool _isPlaying = false;
@@ -121,15 +122,10 @@ class AudioPlaylistProvider with ChangeNotifier {
       notifyListeners();
       return;
     }
-    try {
-      final PaletteGenerator paletteGenerator =
-          await PaletteGenerator.fromImageProvider(
-        NetworkImage(track.imageUrl),
-      );
-      _currentTrackDominantColor = paletteGenerator.dominantColor?.color;
-    } catch (e) {
-      _currentTrackDominantColor = null; // Reset on error
-    }
+    // Use the ImageThemeService to get the dominant color
+    // Pass a scale factor; smaller scale (e.g., 2.0 or 4.0) means smaller image, faster processing.
+    // Adjust imageScale based on your needs and original image sizes.
+    _currentTrackDominantColor = await _imageThemeService.getDominantColor(track.imageUrl, imageScale: 2.0);
     notifyListeners();
   }
   @override

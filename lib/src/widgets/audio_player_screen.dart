@@ -137,11 +137,10 @@ class _AudioPlayerScreenBody extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final double statusBarHeight = MediaQuery.of(context).padding.top;
-    // Get the dominant color from the provider
+   
     final dominantColor = context.select<AudioPlaylistProvider, Color?>(
         (p) => p.currentTrackDominantColor);
 
-    // Determine text/icon color based on background luminance for better contrast
     final bool isDarkBackground =
         (dominantColor?.computeLuminance() ?? 0.5) < 0.5;
     final Color primaryContentColor =
@@ -160,6 +159,8 @@ class _AudioPlayerScreenBody extends StatelessWidget {
       ),
       child: Scaffold(
         body: Container(
+          width: double.infinity,
+          height: double.infinity, 
           decoration: BoxDecoration(
             gradient: LinearGradient(
               colors: [
@@ -168,13 +169,11 @@ class _AudioPlayerScreenBody extends StatelessWidget {
               ],
               begin: Alignment.topCenter,
               end: Alignment.bottomCenter,
-              stops: const [
-                0.0,
-                0.8
-              ], // Adjust stops for desired transition speed
+              stops: const [0.0, 0.8],
             ),
           ),
           child: SingleChildScrollView(
+            physics: const AlwaysScrollableScrollPhysics(), // Ensure it's always scrollable
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -188,7 +187,7 @@ class _AudioPlayerScreenBody extends StatelessWidget {
                     primaryContentColor: primaryContentColor,
                     secondaryContentColor: secondaryContentColor),
                 16.toVerticalSizedBox,
-                const _ProgressBarSection(), // Progress bar might need color adjustments too
+                const _ProgressBarSection(),
                 _ControlsSection(
                     enableShuffle: enableShuffle,
                     enableRepeat: enableRepeat,
@@ -334,9 +333,9 @@ class _ProgressBarSection extends StatelessWidget {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Text(formatDuration(
-                  position)), // Text color will be inherited from Theme
+                  position)), 
               Text(formatDuration(totalDuration ??
-                  Duration.zero)), // Text color will be inherited
+                  Duration.zero)), 
             ],
           ),
         ),

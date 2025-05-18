@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_audio_playlist/flutter_video_playlist.dart';
 import 'package:provider/provider.dart';
-import '../models/audio_track.dart';
 
 class AudioTile extends StatelessWidget {
   final AudioTrack track;
