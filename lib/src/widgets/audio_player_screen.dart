@@ -8,15 +8,42 @@ import '../models/audio_track.dart';
 import '../utils/format_duration.dart';
 import '../enums/repeat_mode.dart';
 
+/// A screen that provides a pre-built UI for audio playback.
+///
+/// This screen displays track details, playback controls, progress bar,
+/// and an "Up Next" section. It is highly customizable through the [theme]
+/// property or by providing a [customPlayerScreen].
+///
+/// It interacts with [AudioPlaylistProvider] to manage and reflect the audio playback state.
+///
+/// Example:
+/// ```dart
+/// Navigator.push(
+///   context,
+///   MaterialPageRoute(
+///     builder: (context) => AudioPlayerScreen(
+///       theme: AudioPlayerThemeData(
+///         screenBackgroundColor: Colors.blueGrey,
+///         titleTextStyle: TextStyle(color: Colors.white, fontSize: 22),
+///       ),
+///     ),
+///   ),
+/// );
+/// ```
 class AudioPlayerScreen extends StatefulWidget {
   /// Optional theme data to customize the appearance of the audio player screen.
-  /// If not provided, it will try to use `AudioPlayerTheme.of(context)` or default styles.
+  /// If not provided, it will try to use `AudioPlayerTheme.of(context)` or default styles
+  /// defined within [AudioPlayerThemeData].
   final AudioPlayerThemeData? theme;
 
-  /// A custom widget to display as the player screen. If provided, this will be
-  /// used instead of the default player UI.
+  /// An optional custom widget to display as the entire player screen.
+  /// If provided, this widget will be used instead of the default UI built by
+  /// [DefaultAudioPlayerScreenBody]. This allows for complete UI replacement
+  /// while still leveraging the navigation to this screen.
   final Widget? customPlayerScreen;
 
+  /// A list of [Duration] options to be displayed in the sleep timer bottom sheet.
+  /// Defaults to 2, 5, 10, and 15 minutes.
   final List<Duration> sleepTimerOptions;
 
   const AudioPlayerScreen({
@@ -36,6 +63,7 @@ class AudioPlayerScreen extends StatefulWidget {
 }
 
 class _AudioPlayerScreenState extends State<AudioPlayerScreen> {
+  // Shows a modal bottom sheet for selecting or cancelling a sleep timer.
   void _showSleepTimerBottomSheet(BuildContext modalContext,
       AudioPlaylistProvider providerForActions, AudioPlayerThemeData theme) {
     showModalBottomSheet(
@@ -67,6 +95,7 @@ class _AudioPlayerScreenState extends State<AudioPlayerScreen> {
                 },
               ),
               ...widget.sleepTimerOptions.map((duration) => ListTile(
+                    // Display each sleep timer option.
                     title: Text('${duration.inMinutes} minutes'),
                     titleTextStyle: theme.subtitleTextStyle
                         ?.copyWith(color: theme.primaryContentColor),
@@ -99,27 +128,37 @@ class _AudioPlayerScreenState extends State<AudioPlayerScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // If a custom screen is provided, display it directly.
     if (widget.customPlayerScreen != null) return widget.customPlayerScreen!;
     final width = MediaQuery.of(context).size.width;
+    // Resolve the theme:
+    // 1. Use the theme passed directly to the widget.
+    // 2. If not available, try to find an AudioPlayerTheme higher in the widget tree.
+    // 3. Fallback to a default AudioPlayerThemeData if none is found.
     final theme = widget.theme ??
         AudioPlayerTheme.of(context) ??
         const AudioPlayerThemeData();
 
     return Selector<AudioPlaylistProvider, AudioTrack?>(
+      // Rebuild the screen body only when the current track changes or becomes null.
       selector: (_, provider) => provider.currentTrack,
       builder: (context, currentTrack, child) {
         if (currentTrack == null) {
+          // Display a message if no track is currently playing.
           return const Scaffold(
             body: Center(child: Text('No track currently playing')),
           );
         }
-
+        // DefaultAudioPlayerScreenBody will use context.watch internally for other state changes.
+        // However, actions like setting sleep timer still need a provider instance.
         final audioProviderForActions = context.watch<AudioPlaylistProvider>();
 
         return DefaultAudioPlayerScreenBody(
           theme: theme,
           width: width,
           currentTrack: currentTrack,
+          // Pass the provider instance that DefaultAudioPlayerScreenBody will watch.
+          // This ensures DefaultAudioPlayerScreenBody rebuilds on relevant state changes.
           audioPlaylistProvider: audioProviderForActions,
           showSleepTimerBottomSheet: (bottomSheetLauncherContext) =>
               _showSleepTimerBottomSheet(
@@ -133,12 +172,24 @@ class _AudioPlayerScreenState extends State<AudioPlayerScreen> {
 /// The default UI for the audio player screen.
 /// This widget is responsible for laying out the player controls, track details, etc.
 /// It uses the provided [AudioPlayerThemeData] for styling.
+///
+/// It receives an [AudioPlaylistProvider] instance (obtained via `context.watch` by its parent)
+/// to get live updates for playback state (e.g., position, isPlaying)
+/// and passes this data down to its child components.
 class DefaultAudioPlayerScreenBody extends StatelessWidget {
+  /// The theme data for styling the player screen.
   final AudioPlayerThemeData theme;
+
+  /// The width of the screen, used for responsive image sizing.
   final double width;
+
+  /// The currently playing audio track.
   final AudioTrack currentTrack;
-  final AudioPlaylistProvider
-      audioPlaylistProvider; // To access state and actions
+
+  /// The audio playlist provider, watched by the parent, to access state and actions.
+  final AudioPlaylistProvider audioPlaylistProvider;
+
+  /// Callback to show the sleep timer bottom sheet.
   final Function(BuildContext) showSleepTimerBottomSheet;
 
   const DefaultAudioPlayerScreenBody({
@@ -154,6 +205,7 @@ class DefaultAudioPlayerScreenBody extends StatelessWidget {
   Widget build(BuildContext context) {
     final double statusBarHeight = MediaQuery.of(context).padding.top;
 
+    // Use the dominant color from the provider, which is already being watched by the parent.
     final dominantColor = context.select<AudioPlaylistProvider, Color?>(
         (p) => p.currentTrackDominantColor);
 
@@ -162,6 +214,7 @@ class DefaultAudioPlayerScreenBody extends StatelessWidget {
     Gradient effectiveBackgroundGradient;
     Color effectiveBackgroundColor;
 
+    // Determine colors and gradients based on theme settings and dominant color.
     if (theme.useDominantColorForBackground && dominantColor != null) {
       final bool isDarkDominant = dominantColor.computeLuminance() < 0.5;
       effectivePrimaryContentColor = theme.primaryContentColor ??
@@ -192,9 +245,11 @@ class DefaultAudioPlayerScreenBody extends StatelessWidget {
 
     return Theme(
       data: Theme.of(context).copyWith(
+        // Apply primary content color to default icon themes if not overridden by specific theme properties.
         iconTheme: Theme.of(context)
             .iconTheme
             .copyWith(color: theme.primaryContentColor),
+        // Apply primary content color to default text themes if not overridden by specific theme properties.
         textTheme: Theme.of(context).textTheme.apply(
               bodyColor: theme.primaryContentColor,
               displayColor: theme.primaryContentColor,
@@ -331,11 +386,18 @@ class DefaultAudioPlayerScreenBody extends StatelessWidget {
   }
 }
 
+/// A reusable back button widget, typically used at the top of the player screen.
+///
+/// Allows customization of the icon, color, and onPressed behavior.
 class PlayerBackButton extends StatelessWidget {
+  /// The icon to display. Defaults to [Icons.arrow_back_ios_new].
   final IconData? icon;
+  /// The color of the icon. Defaults to the ambient [IconThemeData.color].
   final Color? color;
+   /// The callback to be invoked when the button is pressed.
+  /// Defaults to `Navigator.pop(context)`.
   final VoidCallback? onPressed;
-
+  /// Creates a player back button.
   const PlayerBackButton({super.key, this.icon, this.color, this.onPressed});
 
   @override
@@ -352,17 +414,40 @@ class PlayerBackButton extends StatelessWidget {
   }
 }
 
+/// A widget that displays the details of an [AudioTrack].
+///
+/// This includes the album art, title, subtitle, and an optional sleep timer button.
+/// Styling can be customized via constructor parameters.
 class TrackDetailsSection extends StatelessWidget {
+  /// The audio track whose details are to be displayed.
   final AudioTrack track;
+  /// The width of the album art image.
   final double imageWidth;
+  /// The height of the album art image.
   final double imageHeight;
+
+  /// The text style for the track title.
   final TextStyle? titleTextStyle;
+
+  /// The text style for the track subtitle (e.g., artist name).
   final TextStyle? subtitleTextStyle;
+
+  /// The border radius for the album art image. Defaults to 16.0.
   final double albumArtBorderRadius;
+
+  /// Whether to show the sleep timer button. Defaults to true.
   final bool showSleepTimerButton;
+
+  /// The color of the sleep timer icon.
   final Color? sleepTimerIconColor;
+
+  /// Callback invoked when the sleep timer button is pressed.
   final VoidCallback? onSleepTimerPressed;
 
+  /// Creates a track details section.
+  ///
+  /// Requires [track], [imageWidth], and [imageHeight].
+  /// Other parameters are optional and provide styling customization.
   const TrackDetailsSection({
     super.key,
     required this.track,
@@ -378,6 +463,7 @@ class TrackDetailsSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Resolve effective text styles, falling back to theme defaults if not provided.
     final effectiveTitleStyle = titleTextStyle ??
         Theme.of(context)
             .textTheme
@@ -436,13 +522,28 @@ class TrackDetailsSection extends StatelessWidget {
   }
 }
 
+/// A widget that displays the audio playback progress bar, current position,
+/// and total duration.
+///
+/// Allows users to seek to a specific position by interacting with the slider.
+/// Styling for the slider and text can be customized.
 class ProgressBarSection extends StatelessWidget {
+  /// The current playback position.
   final Duration position;
+
+  /// The total duration of the current track. Can be null if duration is not yet known.
   final Duration? totalDuration;
+
+  /// Callback invoked when the user seeks to a new position using the slider.
   final ValueChanged<Duration> onSeek;
+
+  /// Custom theme data for the slider.
   final SliderThemeData? sliderThemeData;
+
+  /// Custom text style for the time indicators (current position and total duration).
   final TextStyle? timeTextStyle;
 
+  /// Creates a progress bar section.
   const ProgressBarSection({
     super.key,
     required this.position,
@@ -454,6 +555,7 @@ class ProgressBarSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Resolve slider theme and text style, falling back to context theme if not provided.
     final localSliderTheme = sliderThemeData ?? SliderTheme.of(context);
     final localTimeTextStyle =
         timeTextStyle ?? Theme.of(context).textTheme.bodySmall;
@@ -486,25 +588,64 @@ class ProgressBarSection extends StatelessWidget {
   }
 }
 
+/// A widget that provides playback control buttons.
+///
+/// Includes buttons for play/pause, skip next, skip previous, shuffle, and repeat.
+/// The visibility, size, and color of these buttons can be customized.
 class ControlsSection extends StatelessWidget {
+  /// Whether the audio is currently playing.
   final bool isPlaying;
+
+  /// Whether shuffle mode is active.
   final bool isShuffling;
+
+  /// The current repeat mode ([RepeatMode.off], [RepeatMode.repeatOnce], [RepeatMode.repeatCurrent]).
   final RepeatMode repeatMode;
+
+  /// Callback invoked when the play/pause button is pressed.
   final VoidCallback onPlayPause;
+
+  /// Callback invoked when the skip next button is pressed.
   final VoidCallback onSkipNext;
+
+  /// Callback invoked when the skip previous button is pressed.
   final VoidCallback onSkipPrevious;
+
+  /// Callback invoked when the shuffle button is pressed.
   final VoidCallback onToggleShuffle;
+
+  /// Callback invoked when the repeat button is pressed, cycling through repeat modes.
   final VoidCallback onCycleRepeatMode;
 
+  /// Whether to show the shuffle button. Defaults to true.
   final bool showShuffleButton;
-  final bool showRepeatButton;
-  final double controlButtonSize;
-  final double playPauseButtonSize;
-  final Color? controlButtonColor; // General color for icons like prev/next
-  final Color? activeControlButtonColor; // For shuffle/repeat when active
-  final Color? inactiveControlButtonColor; // For shuffle/repeat when inactive
-  final Color? playPauseButtonColor; // For play/pause icon
 
+  /// Whether to show the repeat button. Defaults to true.
+  final bool showRepeatButton;
+
+  /// The size for standard control buttons (skip, shuffle, repeat). Defaults to 36.0.
+  final double controlButtonSize;
+
+  /// The size for the play/pause button. Defaults to 64.0.
+  final double playPauseButtonSize;
+
+  /// The color for general control button icons (e.g., skip next/previous).
+  /// Defaults to the ambient [IconThemeData.color].
+  final Color? controlButtonColor;
+
+  /// The color for control buttons when they are in an active state (e.g., shuffle on, repeat on).
+  /// Defaults to [ColorScheme.primary].
+  final Color? activeControlButtonColor;
+
+  /// The color for control buttons when they are in an inactive state (e.g., shuffle off, repeat off).
+  /// Defaults to [ThemeData.disabledColor].
+  final Color? inactiveControlButtonColor;
+
+  /// The color for the play/pause button icon.
+  /// Defaults to the ambient [IconThemeData.color].
+  final Color? playPauseButtonColor;
+
+  /// Creates a controls section.
   const ControlsSection({
     super.key,
     required this.isPlaying,
@@ -527,6 +668,7 @@ class ControlsSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Resolve effective colors for buttons, falling back to theme defaults.
     final effectiveControlButtonColor =
         controlButtonColor ?? Theme.of(context).iconTheme.color;
     final effectiveActiveColor =
@@ -583,6 +725,7 @@ class ControlsSection extends StatelessWidget {
             onPressed: onSkipNext,
           ),
           if (showRepeatButton)
+            // Repeat button, icon changes based on current repeat mode.
             Builder(builder: (context) {
               IconData icon;
               Color iconColor;
@@ -614,16 +757,41 @@ class ControlsSection extends StatelessWidget {
   }
 }
 
+/// A widget that displays a horizontal list of upcoming tracks.
+///
+/// Each track is shown as a card with album art and title.
+/// Tapping a card triggers playback of that track.
+/// Styling for the section title and track cards can be customized.
 class UpNextSection extends StatelessWidget {
+  /// The list of audio tracks to be displayed as "Up Next".
   final List<AudioTrack> upNextTracks;
-  final ValueChanged<AudioTrack> onTrackSelected;
-  final TextStyle? titleStyle;
-  final TextStyle? cardTextStyle;
-  final BoxDecoration? cardDecoration; // For the card itself
-  final Size? cardItemSize; // Width and Height for the card
-  final Color? cardBackgroundColor;
-  final EdgeInsetsGeometry? cardPadding; // Padding inside the card
 
+  /// Callback invoked when an "Up Next" track card is tapped.
+  final ValueChanged<AudioTrack> onTrackSelected;
+
+  /// The text style for the "Up Next" section title.
+  final TextStyle? titleStyle;
+
+  /// The text style for the track title within each card.
+  final TextStyle? cardTextStyle;
+
+  /// The decoration for each track card.
+  final BoxDecoration? cardDecoration;
+
+  /// The size (width and height) for each track card. Defaults to Size(100, 150).
+  final Size? cardItemSize;
+
+  /// The background color for each track card.
+  /// Overridden by [cardDecoration] if both are provided.
+  final Color? cardBackgroundColor;
+
+  /// The padding inside each track card. Defaults to EdgeInsets.all(8.0).
+  final EdgeInsetsGeometry? cardPadding;
+
+  /// Creates an "Up Next" section.
+  ///
+  /// Requires [upNextTracks] and [onTrackSelected].
+  /// Other parameters are optional for styling.
   const UpNextSection({
     super.key,
     required this.upNextTracks,
@@ -638,6 +806,7 @@ class UpNextSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Do not build the section if there are no upcoming tracks.
     if (upNextTracks.isEmpty) return const SizedBox.shrink();
 
     final effectiveTitleStyle = titleStyle ??
@@ -661,12 +830,14 @@ class UpNextSection extends StatelessWidget {
           child: Text('Up Next', style: effectiveTitleStyle),
         ),
         SizedBox(
+          // Constrain the height of the horizontal list.
           height: effectiveCardItemSize.height,
           child: ListView.builder(
             scrollDirection: Axis.horizontal,
             itemCount: upNextTracks.length,
             itemBuilder: (context, index) {
               final track = upNextTracks[index];
+              // Build each track card.
               return Container(
                 width: effectiveCardItemSize.width,
                 margin: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
