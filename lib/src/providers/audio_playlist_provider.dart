@@ -122,10 +122,8 @@ class AudioPlaylistProvider with ChangeNotifier {
       notifyListeners();
       return;
     }
-    // Use the ImageThemeService to get the dominant color
-    // Pass a scale factor; smaller scale (e.g., 2.0 or 4.0) means smaller image, faster processing.
-    // Adjust imageScale based on your needs and original image sizes.
-    _currentTrackDominantColor = await _imageThemeService.getDominantColor(track.imageUrl, imageScale: 2.0);
+   
+    _currentTrackDominantColor = await _imageThemeService.getDominantColor(track.imageUrl, imageScale: 3.0);
     notifyListeners();
   }
   @override

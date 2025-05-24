@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_audio_playlist/src/utils/extension.dart';
+import 'package:flutter_audio_playlist/src/theme/audio_player_theme_data.dart';
 import 'package:flutter_audio_playlist/src/widgets/app_cached_network.dart';
 import 'package:provider/provider.dart';
 import '../providers/audio_playlist_provider.dart';
@@ -8,21 +9,22 @@ import '../utils/format_duration.dart';
 import '../enums/repeat_mode.dart';
 
 class AudioPlayerScreen extends StatefulWidget {
+  /// Optional theme data to customize the appearance of the audio player screen.
+  /// If not provided, it will try to use `AudioPlayerTheme.of(context)` or default styles.
+  final AudioPlayerThemeData? theme;
+
+  /// A custom widget to display as the player screen. If provided, this will be
+  /// used instead of the default player UI.
   final Widget? customPlayerScreen;
-  final bool enableShuffle;
-  final bool enableRepeat;
-  final bool enableSleepTimer;
-  final bool enableUpNext;
+
   final List<Duration> sleepTimerOptions;
 
   const AudioPlayerScreen({
     super.key,
+    this.theme,
     this.customPlayerScreen,
-    this.enableShuffle = true,
-    this.enableRepeat = true,
-    this.enableSleepTimer = true,
-    this.enableUpNext = true,
     this.sleepTimerOptions = const [
+      Duration(minutes: 2),
       Duration(minutes: 5),
       Duration(minutes: 10),
       Duration(minutes: 15),
@@ -34,10 +36,12 @@ class AudioPlayerScreen extends StatefulWidget {
 }
 
 class _AudioPlayerScreenState extends State<AudioPlayerScreen> {
-  void _showSleepTimerBottomSheet(
-      BuildContext modalContext, AudioPlaylistProvider providerForActions) {
+  void _showSleepTimerBottomSheet(BuildContext modalContext,
+      AudioPlaylistProvider providerForActions, AudioPlayerThemeData theme) {
     showModalBottomSheet(
       context: modalContext,
+      backgroundColor: theme.screenBackgroundColor ??
+          Theme.of(modalContext).bottomSheetTheme.backgroundColor, // Use theme
       builder: (bottomSheetBuilderContext) {
         return Container(
           padding: const EdgeInsets.all(16),
@@ -52,7 +56,11 @@ class _AudioPlayerScreenState extends State<AudioPlayerScreen> {
                       padding: const EdgeInsets.only(bottom: 8.0),
                       child: Text(
                           'Time left: ${formatDuration(sleepTimerValue)}',
-                          style: const TextStyle(fontWeight: FontWeight.bold)),
+                          style: theme.subtitleTextStyle
+                                  ?.copyWith(fontWeight: FontWeight.bold) ??
+                              TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  color: theme.primaryContentColor)),
                     );
                   }
                   return const SizedBox.shrink();
@@ -60,6 +68,8 @@ class _AudioPlayerScreenState extends State<AudioPlayerScreen> {
               ),
               ...widget.sleepTimerOptions.map((duration) => ListTile(
                     title: Text('${duration.inMinutes} minutes'),
+                    titleTextStyle: theme.subtitleTextStyle
+                        ?.copyWith(color: theme.primaryContentColor),
                     onTap: () {
                       providerForActions.setSleepTimer(duration);
                       Navigator.pop(bottomSheetBuilderContext);
@@ -74,7 +84,8 @@ class _AudioPlayerScreenState extends State<AudioPlayerScreen> {
                           providerForActions.cancelSleepTimer();
                           Navigator.pop(bottomSheetBuilderContext);
                         },
-                        child: const Text('Cancel Timer'),
+                        child: Text('Cancel Timer',
+                            style: TextStyle(color: theme.primaryContentColor)),
                       );
                     }
                     return const SizedBox.shrink();
@@ -90,6 +101,9 @@ class _AudioPlayerScreenState extends State<AudioPlayerScreen> {
   Widget build(BuildContext context) {
     if (widget.customPlayerScreen != null) return widget.customPlayerScreen!;
     final width = MediaQuery.of(context).size.width;
+    final theme = widget.theme ??
+        AudioPlayerTheme.of(context) ??
+        const AudioPlayerThemeData();
 
     return Selector<AudioPlaylistProvider, AudioTrack?>(
       selector: (_, provider) => provider.currentTrack,
@@ -100,101 +114,214 @@ class _AudioPlayerScreenState extends State<AudioPlayerScreen> {
           );
         }
 
-        final audioProviderForActions = context.read<AudioPlaylistProvider>();
+        final audioProviderForActions = context.watch<AudioPlaylistProvider>();
 
-        return _AudioPlayerScreenBody(
+        return DefaultAudioPlayerScreenBody(
+          theme: theme,
           width: width,
-          enableShuffle: widget.enableShuffle,
-          enableRepeat: widget.enableRepeat,
-          enableSleepTimer: widget.enableSleepTimer,
-          enableUpNext: widget.enableUpNext,
+          currentTrack: currentTrack,
+          audioPlaylistProvider: audioProviderForActions,
           showSleepTimerBottomSheet: (bottomSheetLauncherContext) =>
               _showSleepTimerBottomSheet(
-                  bottomSheetLauncherContext, audioProviderForActions),
+                  bottomSheetLauncherContext, audioProviderForActions, theme),
         );
       },
     );
   }
 }
 
-class _AudioPlayerScreenBody extends StatelessWidget {
+/// The default UI for the audio player screen.
+/// This widget is responsible for laying out the player controls, track details, etc.
+/// It uses the provided [AudioPlayerThemeData] for styling.
+class DefaultAudioPlayerScreenBody extends StatelessWidget {
+  final AudioPlayerThemeData theme;
   final double width;
-  final bool enableShuffle;
-  final bool enableRepeat;
-  final bool enableSleepTimer;
-  final bool enableUpNext;
+  final AudioTrack currentTrack;
+  final AudioPlaylistProvider
+      audioPlaylistProvider; // To access state and actions
   final Function(BuildContext) showSleepTimerBottomSheet;
 
-  const _AudioPlayerScreenBody({
+  const DefaultAudioPlayerScreenBody({
+    super.key,
+    required this.theme,
     required this.width,
-    required this.enableShuffle,
-    required this.enableRepeat,
-    required this.enableSleepTimer,
-    required this.enableUpNext,
+    required this.currentTrack,
+    required this.audioPlaylistProvider,
     required this.showSleepTimerBottomSheet,
   });
 
   @override
   Widget build(BuildContext context) {
     final double statusBarHeight = MediaQuery.of(context).padding.top;
-   
+
     final dominantColor = context.select<AudioPlaylistProvider, Color?>(
         (p) => p.currentTrackDominantColor);
 
-    final bool isDarkBackground =
-        (dominantColor?.computeLuminance() ?? 0.5) < 0.5;
-    final Color primaryContentColor =
-        isDarkBackground ? Colors.white : Colors.black87;
-    final Color secondaryContentColor =
-        isDarkBackground ? Colors.white70 : Colors.black54;
+    Color effectivePrimaryContentColor;
+    Color effectiveSecondaryContentColor;
+    Gradient effectiveBackgroundGradient;
+    Color effectiveBackgroundColor;
+
+    if (theme.useDominantColorForBackground && dominantColor != null) {
+      final bool isDarkDominant = dominantColor.computeLuminance() < 0.5;
+      effectivePrimaryContentColor = theme.primaryContentColor ??
+          (isDarkDominant ? Colors.white : Colors.black87);
+      effectiveSecondaryContentColor = theme.secondaryContentColor ??
+          (isDarkDominant ? Colors.white70 : Colors.black54);
+      effectiveBackgroundGradient = theme.screenBackgroundGradient ??
+          LinearGradient(
+            colors: [dominantColor, Colors.black],
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            stops: const [0.0, 0.8],
+          );
+      effectiveBackgroundColor = theme.screenBackgroundColor ?? dominantColor;
+    } else {
+      effectivePrimaryContentColor =
+          theme.primaryContentColor ?? Theme.of(context).colorScheme.onSurface;
+      effectiveSecondaryContentColor = theme.secondaryContentColor ??
+          Theme.of(context).colorScheme.onSurface.withOpacity(0.7);
+      effectiveBackgroundGradient = theme.screenBackgroundGradient ??
+          LinearGradient(colors: [
+            Theme.of(context).scaffoldBackgroundColor,
+            Theme.of(context).scaffoldBackgroundColor
+          ]);
+      effectiveBackgroundColor = theme.screenBackgroundColor ??
+          Theme.of(context).scaffoldBackgroundColor;
+    }
 
     return Theme(
       data: Theme.of(context).copyWith(
-        iconTheme:
-            Theme.of(context).iconTheme.copyWith(color: primaryContentColor),
+        iconTheme: Theme.of(context)
+            .iconTheme
+            .copyWith(color: theme.primaryContentColor),
         textTheme: Theme.of(context).textTheme.apply(
-              bodyColor: primaryContentColor,
-              displayColor: primaryContentColor,
+              bodyColor: theme.primaryContentColor,
+              displayColor: theme.primaryContentColor,
             ),
       ),
       child: Scaffold(
         body: Container(
           width: double.infinity,
-          height: double.infinity, 
+          height: double.infinity,
           decoration: BoxDecoration(
-            gradient: LinearGradient(
-              colors: [
-                dominantColor ?? Theme.of(context).scaffoldBackgroundColor,
-                Colors.black
-              ],
-              begin: Alignment.topCenter,
-              end: Alignment.bottomCenter,
-              stops: const [0.0, 0.8],
-            ),
+            gradient: effectiveBackgroundGradient,
           ),
           child: SingleChildScrollView(
-            physics: const AlwaysScrollableScrollPhysics(), // Ensure it's always scrollable
+            physics:
+                const AlwaysScrollableScrollPhysics(), // Ensure it's always scrollable
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 SizedBox(height: statusBarHeight),
-                _buildBackButton(context, primaryContentColor),
-                _TrackDetailsSection(
-                    width: width,
-                    enableSleepTimer: enableSleepTimer,
-                    showSleepTimerBottomSheet: () =>
-                        showSleepTimerBottomSheet(context),
-                    primaryContentColor: primaryContentColor,
-                    secondaryContentColor: secondaryContentColor),
-                16.toVerticalSizedBox,
-                const _ProgressBarSection(),
-                _ControlsSection(
-                    enableShuffle: enableShuffle,
-                    enableRepeat: enableRepeat,
-                    primaryContentColor: primaryContentColor,
-                    secondaryContentColor: secondaryContentColor),
-                if (enableUpNext)
-                  _UpNextSection(secondaryContentColor: secondaryContentColor),
+                PlayerBackButton(
+                  icon: theme.backButtonIcon,
+                  color: theme.backButtonColor ?? effectivePrimaryContentColor,
+                ),
+                Padding(
+                  padding: theme.screenPadding ??
+                      const EdgeInsets.symmetric(horizontal: 20.0),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      TrackDetailsSection(
+                        track: currentTrack,
+                        imageWidth: width -
+                            (theme.screenPadding?.horizontal ??
+                                40), // Adjust for padding
+                        imageHeight:
+                            width - (theme.screenPadding?.horizontal ?? 40),
+                        titleTextStyle: theme.titleTextStyle ??
+                            TextStyle(
+                                fontSize: 20,
+                                fontWeight: FontWeight.bold,
+                                color: effectivePrimaryContentColor),
+                        subtitleTextStyle: theme.subtitleTextStyle ??
+                            TextStyle(color: effectiveSecondaryContentColor),
+                        albumArtBorderRadius:
+                            theme.albumArtBorderRadius ?? 16.0,
+                        showSleepTimerButton: theme.showSleepTimerButton,
+                        sleepTimerIconColor: effectivePrimaryContentColor,
+                        onSleepTimerPressed: () =>
+                            showSleepTimerBottomSheet(context),
+                      ),
+                      SizedBox(height: theme.spacingBetweenElements ?? 16.0),
+                      ProgressBarSection(
+                        position: audioPlaylistProvider.position,
+                        totalDuration: audioPlaylistProvider.totalDuration,
+                        onSeek: audioPlaylistProvider.seek,
+                        sliderThemeData: theme.sliderThemeData ??
+                            SliderTheme.of(context).copyWith(
+                              activeTrackColor:
+                                  theme.sliderThemeData?.activeTrackColor ??
+                                      effectivePrimaryContentColor,
+                              inactiveTrackColor:
+                                  theme.sliderThemeData?.inactiveTrackColor ??
+                                      effectiveSecondaryContentColor
+                                          .withOpacity(0.3),
+                              thumbColor: theme.sliderThemeData?.thumbColor ??
+                                  effectivePrimaryContentColor,
+                              overlayColor:
+                                  (theme.sliderThemeData?.activeTrackColor ??
+                                          effectivePrimaryContentColor)
+                                      .withOpacity(0.2),
+                            ),
+                        timeTextStyle: theme.trackTimeTextStyle ??
+                            TextStyle(
+                                color: effectiveSecondaryContentColor,
+                                fontSize: 12),
+                      ),
+                      SizedBox(
+                          height: theme.spacingBetweenElements ??
+                              0), // Progress bar usually has its own padding
+                      ControlsSection(
+                        isPlaying: audioPlaylistProvider.isPlaying,
+                        isShuffling: audioPlaylistProvider.isShuffling,
+                        repeatMode: audioPlaylistProvider.repeatMode,
+                        onPlayPause: audioPlaylistProvider.togglePlayPause,
+                        onSkipNext: audioPlaylistProvider.playNext,
+                        onSkipPrevious: audioPlaylistProvider.playPrevious,
+                        onToggleShuffle:
+                            audioPlaylistProvider.toggleShuffleMode,
+                        onCycleRepeatMode:
+                            audioPlaylistProvider.cycleRepeatMode,
+                        showShuffleButton: theme.showShuffleButton,
+                        showRepeatButton: theme.showRepeatButton,
+                        controlButtonSize: theme.controlButtonSize ?? 36,
+                        playPauseButtonSize: theme.playPauseButtonSize ?? 64,
+                        controlButtonColor: theme.controlButtonColor ??
+                            effectivePrimaryContentColor,
+                        activeControlButtonColor:
+                            theme.activeControlButtonColor ??
+                                (dominantColor ??
+                                    Theme.of(context).colorScheme.primary),
+                        inactiveControlButtonColor:
+                            theme.secondaryContentColor ??
+                                effectiveSecondaryContentColor,
+                        playPauseButtonColor: theme.playPauseButtonColor ??
+                            effectivePrimaryContentColor,
+                      ),
+                      if (theme.showUpNextSection)
+                        UpNextSection(
+                          upNextTracks: audioPlaylistProvider.upNextTracks,
+                          onTrackSelected: audioPlaylistProvider.playTrack,
+                          titleStyle: theme.upNextTitleStyle ??
+                              Theme.of(context).textTheme.titleMedium?.copyWith(
+                                  fontWeight: FontWeight.bold,
+                                  color: effectivePrimaryContentColor),
+                          cardTextStyle: theme.upNextCardTextStyle ??
+                              Theme.of(context).textTheme.bodySmall?.copyWith(
+                                  color: effectivePrimaryContentColor),
+                          cardDecoration: theme.upNextCardDecoration,
+                          cardItemSize: theme.upNextCardItemSize,
+                          cardBackgroundColor: theme
+                                  .upNextCardBackgroundColor ??
+                              effectiveSecondaryContentColor.withOpacity(0.2),
+                          cardPadding: theme.upNextCardPadding,
+                        ),
+                    ],
+                  ),
+                ),
               ],
             ),
           ),
@@ -204,127 +331,143 @@ class _AudioPlayerScreenBody extends StatelessWidget {
   }
 }
 
-Widget _buildBackButton(BuildContext context, Color iconColor) {
-  return Padding(
-    padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 15),
-    child: InkWell(
-      onTap: () => Navigator.pop(context),
-      child: Icon(Icons.arrow_back_ios_new, color: iconColor),
-    ),
-  );
-}
+class PlayerBackButton extends StatelessWidget {
+  final IconData? icon;
+  final Color? color;
+  final VoidCallback? onPressed;
 
-class _TrackDetailsSection extends StatelessWidget {
-  final double width;
-  final bool enableSleepTimer;
-  final VoidCallback showSleepTimerBottomSheet;
-  final Color primaryContentColor;
-  final Color secondaryContentColor;
-
-  const _TrackDetailsSection({
-    required this.width,
-    required this.enableSleepTimer,
-    required this.showSleepTimerBottomSheet,
-    required this.primaryContentColor,
-    required this.secondaryContentColor,
-  });
+  const PlayerBackButton({super.key, this.icon, this.color, this.onPressed});
 
   @override
   Widget build(BuildContext context) {
-    final currentTrack = context
-        .select<AudioPlaylistProvider, AudioTrack?>((p) => p.currentTrack);
-    if (currentTrack == null) return const SizedBox.shrink();
-
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 20.0),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          ClipRRect(
-            borderRadius: BorderRadius.circular(16),
-            child: AppCachedNetworkImage(
-              url: currentTrack.imageUrl,
-              width: width,
-              height: width,
-              fit: BoxFit.cover,
-            ),
-          ),
-          16.toVerticalSizedBox,
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      currentTrack.title,
-                      style: TextStyle(
-                          fontSize: 20,
-                          fontWeight: FontWeight.bold,
-                          color: primaryContentColor),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    Text(
-                      currentTrack.subtitle,
-                      style: TextStyle(color: secondaryContentColor),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ],
-                ),
-              ),
-              if (enableSleepTimer)
-                IconButton(
-                  icon: Icon(Icons.timer_outlined, color: primaryContentColor),
-                  onPressed: showSleepTimerBottomSheet,
-                ),
-            ],
-          ),
-        ],
+      padding: const EdgeInsets.symmetric(
+          horizontal: 12.0, vertical: 15), // Adjusted padding
+      child: IconButton(
+        icon: Icon(icon ?? Icons.arrow_back_ios_new,
+            color: color ?? Theme.of(context).iconTheme.color),
+        onPressed: onPressed ?? () => Navigator.pop(context),
       ),
     );
   }
 }
 
-class _ProgressBarSection extends StatelessWidget {
-  const _ProgressBarSection();
+class TrackDetailsSection extends StatelessWidget {
+  final AudioTrack track;
+  final double imageWidth;
+  final double imageHeight;
+  final TextStyle? titleTextStyle;
+  final TextStyle? subtitleTextStyle;
+  final double albumArtBorderRadius;
+  final bool showSleepTimerButton;
+  final Color? sleepTimerIconColor;
+  final VoidCallback? onSleepTimerPressed;
+
+  const TrackDetailsSection({
+    super.key,
+    required this.track,
+    required this.imageWidth,
+    required this.imageHeight,
+    this.titleTextStyle,
+    this.subtitleTextStyle,
+    this.albumArtBorderRadius = 16.0,
+    this.showSleepTimerButton = true,
+    this.sleepTimerIconColor,
+    this.onSleepTimerPressed,
+  });
 
   @override
   Widget build(BuildContext context) {
-    final position =
-        context.select<AudioPlaylistProvider, Duration>((p) => p.position);
-    final totalDuration = context
-        .select<AudioPlaylistProvider, Duration?>((p) => p.totalDuration);
-    final provider = context.read<AudioPlaylistProvider>();
-    final dominantColor = context.select<AudioPlaylistProvider, Color?>(
-        (p) => p.currentTrackDominantColor);
-    final bool isDarkBackground =
-        (dominantColor?.computeLuminance() ?? 0.5) < 0.5;
-    final Color activeSliderColor = isDarkBackground
-        ? Colors.white
-        : (dominantColor ?? Theme.of(context).colorScheme.primary);
-    final Color inactiveSliderColor =
-        isDarkBackground ? Colors.white38 : Colors.grey.shade300;
+    final effectiveTitleStyle = titleTextStyle ??
+        Theme.of(context)
+            .textTheme
+            .titleLarge
+            ?.copyWith(fontWeight: FontWeight.bold);
+    final effectiveSubtitleStyle =
+        subtitleTextStyle ?? Theme.of(context).textTheme.titleMedium;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        ClipRRect(
+          borderRadius: BorderRadius.circular(albumArtBorderRadius),
+          child: AppCachedNetworkImage(
+            url: track.imageUrl,
+            width: imageWidth,
+            height: imageHeight,
+            fit: BoxFit.cover,
+          ),
+        ),
+        16.toVerticalSizedBox, // Consider making this configurable via theme
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    track.title,
+                    style: effectiveTitleStyle,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  Text(
+                    track.subtitle,
+                    style: effectiveSubtitleStyle,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ],
+              ),
+            ),
+            if (showSleepTimerButton)
+              IconButton(
+                icon: Icon(Icons.timer_outlined,
+                    color: sleepTimerIconColor ??
+                        Theme.of(context).iconTheme.color),
+                onPressed: onSleepTimerPressed,
+              ),
+          ],
+        ),
+      ],
+    );
+  }
+}
+
+class ProgressBarSection extends StatelessWidget {
+  final Duration position;
+  final Duration? totalDuration;
+  final ValueChanged<Duration> onSeek;
+  final SliderThemeData? sliderThemeData;
+  final TextStyle? timeTextStyle;
+
+  const ProgressBarSection({
+    super.key,
+    required this.position,
+    this.totalDuration,
+    required this.onSeek,
+    this.sliderThemeData,
+    this.timeTextStyle,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final localSliderTheme = sliderThemeData ?? SliderTheme.of(context);
+    final localTimeTextStyle =
+        timeTextStyle ?? Theme.of(context).textTheme.bodySmall;
 
     return Column(
       children: [
         SliderTheme(
-          data: SliderTheme.of(context).copyWith(
-            activeTrackColor: activeSliderColor,
-            inactiveTrackColor: inactiveSliderColor,
-            thumbColor: activeSliderColor,
-            overlayColor: activeSliderColor.withOpacity(0.2),
-          ),
+          data: localSliderTheme,
           child: Slider(
             value: position.inMilliseconds
                 .toDouble()
                 .clamp(0.0, (totalDuration?.inMilliseconds ?? 1).toDouble()),
             max: (totalDuration?.inMilliseconds ?? 1).toDouble(),
-            onChanged: (value) =>
-                provider.seek(Duration(milliseconds: value.toInt())),
+            onChanged: (value) => onSeek(Duration(milliseconds: value.toInt())),
           ),
         ),
         Padding(
@@ -332,10 +475,9 @@ class _ProgressBarSection extends StatelessWidget {
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(formatDuration(
-                  position)), 
-              Text(formatDuration(totalDuration ??
-                  Duration.zero)), 
+              Text(formatDuration(position), style: localTimeTextStyle),
+              Text(formatDuration(totalDuration ?? Duration.zero),
+                  style: localTimeTextStyle),
             ],
           ),
         ),
@@ -344,54 +486,82 @@ class _ProgressBarSection extends StatelessWidget {
   }
 }
 
-class _ControlsSection extends StatelessWidget {
-  final bool enableShuffle;
-  final bool enableRepeat;
-  final Color primaryContentColor;
-  final Color secondaryContentColor;
+class ControlsSection extends StatelessWidget {
+  final bool isPlaying;
+  final bool isShuffling;
+  final RepeatMode repeatMode;
+  final VoidCallback onPlayPause;
+  final VoidCallback onSkipNext;
+  final VoidCallback onSkipPrevious;
+  final VoidCallback onToggleShuffle;
+  final VoidCallback onCycleRepeatMode;
 
-  const _ControlsSection(
-      {required this.enableShuffle,
-      required this.enableRepeat,
-      required this.primaryContentColor,
-      required this.secondaryContentColor});
+  final bool showShuffleButton;
+  final bool showRepeatButton;
+  final double controlButtonSize;
+  final double playPauseButtonSize;
+  final Color? controlButtonColor; // General color for icons like prev/next
+  final Color? activeControlButtonColor; // For shuffle/repeat when active
+  final Color? inactiveControlButtonColor; // For shuffle/repeat when inactive
+  final Color? playPauseButtonColor; // For play/pause icon
+
+  const ControlsSection({
+    super.key,
+    required this.isPlaying,
+    required this.isShuffling,
+    required this.repeatMode,
+    required this.onPlayPause,
+    required this.onSkipNext,
+    required this.onSkipPrevious,
+    required this.onToggleShuffle,
+    required this.onCycleRepeatMode,
+    this.showShuffleButton = true,
+    this.showRepeatButton = true,
+    this.controlButtonSize = 36.0,
+    this.playPauseButtonSize = 64.0,
+    this.controlButtonColor,
+    this.activeControlButtonColor,
+    this.inactiveControlButtonColor,
+    this.playPauseButtonColor,
+  });
 
   @override
   Widget build(BuildContext context) {
-    final repeatMode =
-        context.select<AudioPlaylistProvider, RepeatMode>((p) => p.repeatMode);
-    final isPlaying =
-        context.select<AudioPlaylistProvider, bool>((p) => p.isPlaying);
-    final isShuffling =
-        context.select<AudioPlaylistProvider, bool>((p) => p.isShuffling);
-    final audioProvider = context.read<AudioPlaylistProvider>();
-    final dominantColor = context.select<AudioPlaylistProvider, Color?>(
-        (p) => p.currentTrackDominantColor);
-    final activeIconColor =
-        dominantColor ?? Theme.of(context).colorScheme.primary;
+    final effectiveControlButtonColor =
+        controlButtonColor ?? Theme.of(context).iconTheme.color;
+    final effectiveActiveColor =
+        activeControlButtonColor ?? Theme.of(context).colorScheme.primary;
+    final effectiveInactiveColor =
+        inactiveControlButtonColor ?? Theme.of(context).disabledColor;
+    final effectivePlayPauseButtonColor =
+        playPauseButtonColor ?? Theme.of(context).iconTheme.color;
 
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 10.0),
+      padding: const EdgeInsets.symmetric(horizontal: 10.0), // Consider theming
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          if (enableShuffle)
+          if (showShuffleButton)
             IconButton(
               icon: Icon(
                 Icons.shuffle,
-                color: isShuffling ? activeIconColor : secondaryContentColor,
+                color:
+                    isShuffling ? effectiveActiveColor : effectiveInactiveColor,
               ),
-              onPressed: audioProvider.toggleShuffleMode,
+              iconSize: controlButtonSize *
+                  0.8, // Slightly smaller for shuffle/repeat
+              onPressed: onToggleShuffle,
             )
           else
             const SizedBox(width: 48),
           IconButton(
-            icon: Icon(Icons.skip_previous, color: primaryContentColor),
-            iconSize: 36,
-            onPressed: audioProvider.playPrevious,
+            icon: Icon(Icons.skip_previous, color: effectiveControlButtonColor),
+            iconSize: controlButtonSize,
+            onPressed: onSkipPrevious,
           ),
           IconButton(
-            iconSize: 64,
+            iconSize: playPauseButtonSize,
             icon: AnimatedSwitcher(
               duration: const Duration(milliseconds: 200),
               transitionBuilder: (Widget child, Animation<double> animation) {
@@ -402,37 +572,38 @@ class _ControlsSection extends StatelessWidget {
                     ? Icons.pause_circle_filled
                     : Icons.play_circle_filled,
                 key: ValueKey<bool>(isPlaying),
-                color: primaryContentColor,
+                color: effectivePlayPauseButtonColor,
               ),
             ),
-            onPressed: audioProvider.togglePlayPause,
+            onPressed: onPlayPause,
           ),
           IconButton(
-            icon: Icon(Icons.skip_next, color: primaryContentColor),
-            iconSize: 36,
-            onPressed: audioProvider.playNext,
+            icon: Icon(Icons.skip_next, color: effectiveControlButtonColor),
+            iconSize: controlButtonSize,
+            onPressed: onSkipNext,
           ),
-          if (enableRepeat)
+          if (showRepeatButton)
             Builder(builder: (context) {
               IconData icon;
               Color iconColor;
               switch (repeatMode) {
                 case RepeatMode.off:
                   icon = Icons.repeat;
-                  iconColor = secondaryContentColor;
+                  iconColor = effectiveInactiveColor;
                   break;
                 case RepeatMode.repeatOnce:
                   icon = Icons.repeat_one;
-                  iconColor = activeIconColor;
+                  iconColor = effectiveActiveColor;
                   break;
                 case RepeatMode.repeatCurrent:
                   icon = Icons.repeat_on;
-                  iconColor = activeIconColor;
+                  iconColor = effectiveActiveColor;
                   break;
               }
               return IconButton(
                 icon: Icon(icon, color: iconColor),
-                onPressed: audioProvider.cycleRepeatMode,
+                iconSize: controlButtonSize * 0.8, // Slightly smaller
+                onPressed: onCycleRepeatMode,
               );
             })
           else
@@ -443,86 +614,108 @@ class _ControlsSection extends StatelessWidget {
   }
 }
 
-class _UpNextSection extends StatelessWidget {
-  final Color secondaryContentColor;
-  const _UpNextSection({required this.secondaryContentColor});
+class UpNextSection extends StatelessWidget {
+  final List<AudioTrack> upNextTracks;
+  final ValueChanged<AudioTrack> onTrackSelected;
+  final TextStyle? titleStyle;
+  final TextStyle? cardTextStyle;
+  final BoxDecoration? cardDecoration; // For the card itself
+  final Size? cardItemSize; // Width and Height for the card
+  final Color? cardBackgroundColor;
+  final EdgeInsetsGeometry? cardPadding; // Padding inside the card
+
+  const UpNextSection({
+    super.key,
+    required this.upNextTracks,
+    required this.onTrackSelected,
+    this.titleStyle,
+    this.cardTextStyle,
+    this.cardDecoration,
+    this.cardItemSize,
+    this.cardBackgroundColor,
+    this.cardPadding,
+  });
 
   @override
   Widget build(BuildContext context) {
-    final upNextTracks = context
-        .select<AudioPlaylistProvider, List<AudioTrack>>((p) => p.upNextTracks);
-    final provider = context.read<AudioPlaylistProvider>();
-
     if (upNextTracks.isEmpty) return const SizedBox.shrink();
 
-    return Padding(
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'Up Next',
-            // Text color will be inherited from Theme in _AudioPlayerScreenBody
-            style: Theme.of(context)
-                .textTheme
-                .titleMedium
-                ?.copyWith(fontWeight: FontWeight.bold),
-          ),
-          10.toVerticalSizedBox,
-          SizedBox(
-            height: 150,
-            child: ListView.builder(
-              scrollDirection: Axis.horizontal,
-              itemCount: upNextTracks.length,
-              itemBuilder: (context, index) {
-                final track = upNextTracks[index];
-                return Card(
-                  elevation: 2,
-                  color: secondaryContentColor
-                      .withOpacity(0.4), // Subtle background for cards
-                  margin:
-                      const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
-                  shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(10)),
-                  child: InkWell(
-                    onTap: () => provider.playTrack(track),
-                    borderRadius: BorderRadius.circular(10),
-                    child: SizedBox(
-                      width: 100,
-                      child: Padding(
-                        padding: const EdgeInsets.all(8.0),
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            ClipRRect(
-                              borderRadius: BorderRadius.circular(8),
-                              child: AppCachedNetworkImage(
-                                url: track.imageUrl,
-                                width: 60,
-                                height: 60,
-                                fit: BoxFit.cover,
-                              ),
-                            ),
-                            8.toVerticalSizedBox,
-                            Text(
-                              track.title,
-                              // Text color will be inherited
-                              style: Theme.of(context).textTheme.bodySmall,
-                              maxLines: 2,
-                              textAlign: TextAlign.center,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ],
+    final effectiveTitleStyle = titleStyle ??
+        Theme.of(context)
+            .textTheme
+            .titleMedium
+            ?.copyWith(fontWeight: FontWeight.bold);
+    final effectiveCardTextStyle =
+        cardTextStyle ?? Theme.of(context).textTheme.bodySmall;
+    final effectiveCardItemSize = cardItemSize ?? const Size(100, 150);
+    final effectiveCardBackgroundColor = cardBackgroundColor ??
+        Theme.of(context).colorScheme.surfaceContainerHighest.withOpacity(0.5);
+    final effectiveCardPadding = cardPadding ?? const EdgeInsets.all(8.0);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.only(
+              top: 16.0, bottom: 8.0), // Theming for this padding?
+          child: Text('Up Next', style: effectiveTitleStyle),
+        ),
+        SizedBox(
+          height: effectiveCardItemSize.height,
+          child: ListView.builder(
+            scrollDirection: Axis.horizontal,
+            itemCount: upNextTracks.length,
+            itemBuilder: (context, index) {
+              final track = upNextTracks[index];
+              return Container(
+                width: effectiveCardItemSize.width,
+                margin: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+                decoration: cardDecoration ??
+                    BoxDecoration(
+                        color: effectiveCardBackgroundColor,
+                        borderRadius: BorderRadius.circular(10),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(0.1),
+                            blurRadius: 4,
+                            offset: const Offset(0, 2),
+                          )
+                        ]),
+                child: InkWell(
+                  onTap: () => onTrackSelected(track),
+                  borderRadius: BorderRadius.circular(10),
+                  child: Padding(
+                    padding: effectiveCardPadding,
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(8),
+                          child: AppCachedNetworkImage(
+                            url: track.imageUrl,
+                            width: effectiveCardItemSize.width *
+                                0.6, // Relative size
+                            height: effectiveCardItemSize.width * 0.6,
+                            fit: BoxFit.cover,
+                          ),
                         ),
-                      ),
+                        SizedBox(height: effectiveCardItemSize.height * 0.05),
+                        Text(
+                          track.title,
+                          style: effectiveCardTextStyle,
+                          maxLines: 2,
+                          textAlign: TextAlign.center,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ],
                     ),
                   ),
-                );
-              },
-            ),
+                ),
+              );
+            },
           ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 }

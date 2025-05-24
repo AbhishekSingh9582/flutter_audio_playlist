@@ -185,7 +185,7 @@ class AudioPlayerService {
     _sleepTimerInstance?.cancel();
     _sleepTimer.add(duration);
     _sleepTimerInstance = Timer(duration, () async {
-      await stop();
+      await _audioPlayer.pause();
       _sleepTimer.add(null);
     });
   }

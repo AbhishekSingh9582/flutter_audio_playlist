@@ -20,10 +20,10 @@ class ImageThemeService {
      
       );
 
-      final Color? dominantColor = colorScheme.primary;
+      final Color dominantColor = colorScheme.primary;
 
       _colorSchemeCache[imageUrl] =
-          colorScheme; // Cache the whole scheme if needed later
+          colorScheme; 
       _dominantColorCache[imageUrl] = dominantColor;
       return dominantColor;
     } catch (e) {
