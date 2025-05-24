@@ -256,6 +256,7 @@ class DefaultAudioPlayerScreenBody extends StatelessWidget {
             ),
       ),
       child: Scaffold(
+        backgroundColor: effectiveBackgroundColor,
         body: Container(
           width: double.infinity,
           height: double.infinity,
@@ -273,109 +274,104 @@ class DefaultAudioPlayerScreenBody extends StatelessWidget {
                   icon: theme.backButtonIcon,
                   color: theme.backButtonColor ?? effectivePrimaryContentColor,
                 ),
-                Padding(
-                  padding: theme.screenPadding ??
-                      const EdgeInsets.symmetric(horizontal: 20.0),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      TrackDetailsSection(
-                        track: currentTrack,
-                        imageWidth: width -
-                            (theme.screenPadding?.horizontal ??
-                                40), // Adjust for padding
-                        imageHeight:
-                            width - (theme.screenPadding?.horizontal ?? 40),
-                        titleTextStyle: theme.titleTextStyle ??
-                            TextStyle(
-                                fontSize: 20,
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    TrackDetailsSection(
+                      track: currentTrack,
+                      imageWidth: width -
+                          (theme.screenPadding?.horizontal ??
+                              40), // Adjust for padding
+                      imageHeight:
+                          width - (theme.screenPadding?.horizontal ?? 40),
+                      screenPadding: theme.screenPadding,
+                      titleTextStyle: theme.titleTextStyle ??
+                          TextStyle(
+                              fontSize: 20,
+                              fontWeight: FontWeight.bold,
+                              color: effectivePrimaryContentColor),
+                      subtitleTextStyle: theme.subtitleTextStyle ??
+                          TextStyle(color: effectiveSecondaryContentColor),
+                      albumArtBorderRadius: theme.albumArtBorderRadius ?? 16.0,
+                      showSleepTimerButton: theme.showSleepTimerButton,
+                      sleepTimerIconColor: effectivePrimaryContentColor,
+                      onSleepTimerPressed: () =>
+                          showSleepTimerBottomSheet(context),
+                    ),
+                    SizedBox(height: theme.spacingBetweenElements ?? 16.0),
+                    ProgressBarSection(
+                      position: audioPlaylistProvider.position,
+                      totalDuration: audioPlaylistProvider.totalDuration,
+                      onSeek: audioPlaylistProvider.seek,
+                      screenPadding: theme.screenPadding,
+                      sliderThemeData: theme.sliderThemeData ??
+                          SliderTheme.of(context).copyWith(
+                            // Use the theme's progressSliderActiveColor if available
+                            activeTrackColor: theme.progressSliderActiveColor ??
+                                effectivePrimaryContentColor,
+                            inactiveTrackColor: theme
+                                    .progressSliderInactiveColor ?? // Assuming you might add this later
+                                effectiveSecondaryContentColor.withOpacity(0.3),
+                            // Use the theme's progressSliderThumbColor if available
+                            thumbColor: theme.progressSliderThumbColor ??
+                                effectivePrimaryContentColor,
+                            overlayColor: (theme.progressSliderActiveColor ??
+                                    effectivePrimaryContentColor)
+                                .withOpacity(0.2),
+                          ),
+                      timeTextStyle: theme.trackTimeTextStyle ??
+                          TextStyle(
+                              color: effectiveSecondaryContentColor,
+                              fontSize: 12),
+                    ),
+                    SizedBox(
+                        height: theme.spacingBetweenElements ??
+                            0), // Progress bar usually has its own padding
+                    ControlsSection(
+                      isPlaying: audioPlaylistProvider.isPlaying,
+                      isShuffling: audioPlaylistProvider.isShuffling,
+                      repeatMode: audioPlaylistProvider.repeatMode,
+                      onPlayPause: audioPlaylistProvider.togglePlayPause,
+                      onSkipNext: audioPlaylistProvider.playNext,
+                      onSkipPrevious: audioPlaylistProvider.playPrevious,
+                      onToggleShuffle: audioPlaylistProvider.toggleShuffleMode,
+                      onCycleRepeatMode: audioPlaylistProvider.cycleRepeatMode,
+                      showShuffleButton: theme.showShuffleButton,
+                      showRepeatButton: theme.showRepeatButton,
+                      controlButtonSize: theme.controlButtonSize ?? 36,
+                      playPauseButtonSize: theme.playPauseButtonSize ?? 64,
+                      screenPadding: theme.screenPadding,
+                      controlButtonColor: theme.controlButtonColor ??
+                          effectivePrimaryContentColor,
+                      activeControlButtonColor:
+                          theme.activeControlButtonColor ??
+                              (dominantColor ??
+                                  Theme.of(context).colorScheme.primary),
+                      inactiveControlButtonColor: theme.secondaryContentColor ??
+                          effectiveSecondaryContentColor,
+                      playPauseButtonColor: theme.playPauseButtonColor ??
+                          effectivePrimaryContentColor,
+                    ),
+                    if (theme.showUpNextSection)
+                      UpNextSection(
+                        upNextTracks: audioPlaylistProvider.upNextTracks,
+                        onTrackSelected: audioPlaylistProvider.playTrack,
+                        titleStyle: theme.upNextTitleStyle ??
+                            Theme.of(context).textTheme.titleMedium?.copyWith(
                                 fontWeight: FontWeight.bold,
                                 color: effectivePrimaryContentColor),
-                        subtitleTextStyle: theme.subtitleTextStyle ??
-                            TextStyle(color: effectiveSecondaryContentColor),
-                        albumArtBorderRadius:
-                            theme.albumArtBorderRadius ?? 16.0,
-                        showSleepTimerButton: theme.showSleepTimerButton,
-                        sleepTimerIconColor: effectivePrimaryContentColor,
-                        onSleepTimerPressed: () =>
-                            showSleepTimerBottomSheet(context),
+                        cardTextStyle: theme.upNextCardTextStyle ??
+                            Theme.of(context)
+                                .textTheme
+                                .bodySmall
+                                ?.copyWith(color: effectivePrimaryContentColor),
+                        cardDecoration: theme.upNextCardDecoration,
+                        cardItemSize: theme.upNextCardItemSize,
+                        cardBackgroundColor: theme.upNextCardBackgroundColor ??
+                            effectiveSecondaryContentColor.withOpacity(0.2),
+                        cardPadding: theme.upNextCardPadding,
                       ),
-                      SizedBox(height: theme.spacingBetweenElements ?? 16.0),
-                      ProgressBarSection(
-                        position: audioPlaylistProvider.position,
-                        totalDuration: audioPlaylistProvider.totalDuration,
-                        onSeek: audioPlaylistProvider.seek,
-                        sliderThemeData: theme.sliderThemeData ??
-                            SliderTheme.of(context).copyWith(
-                              activeTrackColor:
-                                  theme.sliderThemeData?.activeTrackColor ??
-                                      effectivePrimaryContentColor,
-                              inactiveTrackColor:
-                                  theme.sliderThemeData?.inactiveTrackColor ??
-                                      effectiveSecondaryContentColor
-                                          .withOpacity(0.3),
-                              thumbColor: theme.sliderThemeData?.thumbColor ??
-                                  effectivePrimaryContentColor,
-                              overlayColor:
-                                  (theme.sliderThemeData?.activeTrackColor ??
-                                          effectivePrimaryContentColor)
-                                      .withOpacity(0.2),
-                            ),
-                        timeTextStyle: theme.trackTimeTextStyle ??
-                            TextStyle(
-                                color: effectiveSecondaryContentColor,
-                                fontSize: 12),
-                      ),
-                      SizedBox(
-                          height: theme.spacingBetweenElements ??
-                              0), // Progress bar usually has its own padding
-                      ControlsSection(
-                        isPlaying: audioPlaylistProvider.isPlaying,
-                        isShuffling: audioPlaylistProvider.isShuffling,
-                        repeatMode: audioPlaylistProvider.repeatMode,
-                        onPlayPause: audioPlaylistProvider.togglePlayPause,
-                        onSkipNext: audioPlaylistProvider.playNext,
-                        onSkipPrevious: audioPlaylistProvider.playPrevious,
-                        onToggleShuffle:
-                            audioPlaylistProvider.toggleShuffleMode,
-                        onCycleRepeatMode:
-                            audioPlaylistProvider.cycleRepeatMode,
-                        showShuffleButton: theme.showShuffleButton,
-                        showRepeatButton: theme.showRepeatButton,
-                        controlButtonSize: theme.controlButtonSize ?? 36,
-                        playPauseButtonSize: theme.playPauseButtonSize ?? 64,
-                        controlButtonColor: theme.controlButtonColor ??
-                            effectivePrimaryContentColor,
-                        activeControlButtonColor:
-                            theme.activeControlButtonColor ??
-                                (dominantColor ??
-                                    Theme.of(context).colorScheme.primary),
-                        inactiveControlButtonColor:
-                            theme.secondaryContentColor ??
-                                effectiveSecondaryContentColor,
-                        playPauseButtonColor: theme.playPauseButtonColor ??
-                            effectivePrimaryContentColor,
-                      ),
-                      if (theme.showUpNextSection)
-                        UpNextSection(
-                          upNextTracks: audioPlaylistProvider.upNextTracks,
-                          onTrackSelected: audioPlaylistProvider.playTrack,
-                          titleStyle: theme.upNextTitleStyle ??
-                              Theme.of(context).textTheme.titleMedium?.copyWith(
-                                  fontWeight: FontWeight.bold,
-                                  color: effectivePrimaryContentColor),
-                          cardTextStyle: theme.upNextCardTextStyle ??
-                              Theme.of(context).textTheme.bodySmall?.copyWith(
-                                  color: effectivePrimaryContentColor),
-                          cardDecoration: theme.upNextCardDecoration,
-                          cardItemSize: theme.upNextCardItemSize,
-                          cardBackgroundColor: theme
-                                  .upNextCardBackgroundColor ??
-                              effectiveSecondaryContentColor.withOpacity(0.2),
-                          cardPadding: theme.upNextCardPadding,
-                        ),
-                    ],
-                  ),
+                  ],
                 ),
               ],
             ),
@@ -392,11 +388,14 @@ class DefaultAudioPlayerScreenBody extends StatelessWidget {
 class PlayerBackButton extends StatelessWidget {
   /// The icon to display. Defaults to [Icons.arrow_back_ios_new].
   final IconData? icon;
+
   /// The color of the icon. Defaults to the ambient [IconThemeData.color].
   final Color? color;
-   /// The callback to be invoked when the button is pressed.
+
+  /// The callback to be invoked when the button is pressed.
   /// Defaults to `Navigator.pop(context)`.
   final VoidCallback? onPressed;
+
   /// Creates a player back button.
   const PlayerBackButton({super.key, this.icon, this.color, this.onPressed});
 
@@ -421,8 +420,10 @@ class PlayerBackButton extends StatelessWidget {
 class TrackDetailsSection extends StatelessWidget {
   /// The audio track whose details are to be displayed.
   final AudioTrack track;
+
   /// The width of the album art image.
   final double imageWidth;
+
   /// The height of the album art image.
   final double imageHeight;
 
@@ -444,6 +445,8 @@ class TrackDetailsSection extends StatelessWidget {
   /// Callback invoked when the sleep timer button is pressed.
   final VoidCallback? onSleepTimerPressed;
 
+  final EdgeInsetsGeometry? screenPadding;
+
   /// Creates a track details section.
   ///
   /// Requires [track], [imageWidth], and [imageHeight].
@@ -459,6 +462,7 @@ class TrackDetailsSection extends StatelessWidget {
     this.showSleepTimerButton = true,
     this.sleepTimerIconColor,
     this.onSleepTimerPressed,
+    this.screenPadding,
   });
 
   @override
@@ -472,52 +476,55 @@ class TrackDetailsSection extends StatelessWidget {
     final effectiveSubtitleStyle =
         subtitleTextStyle ?? Theme.of(context).textTheme.titleMedium;
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        ClipRRect(
-          borderRadius: BorderRadius.circular(albumArtBorderRadius),
-          child: AppCachedNetworkImage(
-            url: track.imageUrl,
-            width: imageWidth,
-            height: imageHeight,
-            fit: BoxFit.cover,
-          ),
-        ),
-        16.toVerticalSizedBox, // Consider making this configurable via theme
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    track.title,
-                    style: effectiveTitleStyle,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  Text(
-                    track.subtitle,
-                    style: effectiveSubtitleStyle,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ],
-              ),
+    return Padding(
+      padding: screenPadding ?? const EdgeInsets.symmetric(horizontal: 20.0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          ClipRRect(
+            borderRadius: BorderRadius.circular(albumArtBorderRadius),
+            child: AppCachedNetworkImage(
+              url: track.imageUrl,
+              width: imageWidth,
+              height: imageHeight,
+              fit: BoxFit.cover,
             ),
-            if (showSleepTimerButton)
-              IconButton(
-                icon: Icon(Icons.timer_outlined,
-                    color: sleepTimerIconColor ??
-                        Theme.of(context).iconTheme.color),
-                onPressed: onSleepTimerPressed,
+          ),
+          16.toVerticalSizedBox, // Consider making this configurable via theme
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      track.title,
+                      style: effectiveTitleStyle,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    Text(
+                      track.subtitle,
+                      style: effectiveSubtitleStyle,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
+                ),
               ),
-          ],
-        ),
-      ],
+              if (showSleepTimerButton)
+                IconButton(
+                  icon: Icon(Icons.timer_outlined,
+                      color: sleepTimerIconColor ??
+                          Theme.of(context).iconTheme.color),
+                  onPressed: onSleepTimerPressed,
+                ),
+            ],
+          ),
+        ],
+      ),
     );
   }
 }
@@ -543,6 +550,8 @@ class ProgressBarSection extends StatelessWidget {
   /// Custom text style for the time indicators (current position and total duration).
   final TextStyle? timeTextStyle;
 
+  final EdgeInsetsGeometry? screenPadding;
+
   /// Creates a progress bar section.
   const ProgressBarSection({
     super.key,
@@ -551,6 +560,7 @@ class ProgressBarSection extends StatelessWidget {
     required this.onSeek,
     this.sliderThemeData,
     this.timeTextStyle,
+    this.screenPadding,
   });
 
   @override
@@ -573,7 +583,8 @@ class ProgressBarSection extends StatelessWidget {
           ),
         ),
         Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 20),
+          // To align time labels with the slider ends (which respect screenPadding), set internal horizontal padding to zero.
+          padding: screenPadding ?? const EdgeInsets.symmetric(horizontal: 20),
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
@@ -645,26 +656,29 @@ class ControlsSection extends StatelessWidget {
   /// Defaults to the ambient [IconThemeData.color].
   final Color? playPauseButtonColor;
 
+  /// Padding around widget
+  final EdgeInsetsGeometry? screenPadding;
+
   /// Creates a controls section.
-  const ControlsSection({
-    super.key,
-    required this.isPlaying,
-    required this.isShuffling,
-    required this.repeatMode,
-    required this.onPlayPause,
-    required this.onSkipNext,
-    required this.onSkipPrevious,
-    required this.onToggleShuffle,
-    required this.onCycleRepeatMode,
-    this.showShuffleButton = true,
-    this.showRepeatButton = true,
-    this.controlButtonSize = 36.0,
-    this.playPauseButtonSize = 64.0,
-    this.controlButtonColor,
-    this.activeControlButtonColor,
-    this.inactiveControlButtonColor,
-    this.playPauseButtonColor,
-  });
+  const ControlsSection(
+      {super.key,
+      required this.isPlaying,
+      required this.isShuffling,
+      required this.repeatMode,
+      required this.onPlayPause,
+      required this.onSkipNext,
+      required this.onSkipPrevious,
+      required this.onToggleShuffle,
+      required this.onCycleRepeatMode,
+      this.showShuffleButton = true,
+      this.showRepeatButton = true,
+      this.controlButtonSize = 36.0,
+      this.playPauseButtonSize = 64.0,
+      this.controlButtonColor,
+      this.activeControlButtonColor,
+      this.inactiveControlButtonColor,
+      this.playPauseButtonColor,
+      this.screenPadding});
 
   @override
   Widget build(BuildContext context) {
@@ -679,25 +693,28 @@ class ControlsSection extends StatelessWidget {
         playPauseButtonColor ?? Theme.of(context).iconTheme.color;
 
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 10.0), // Consider theming
+      // To align controls with TrackDetailsSection content (respecting screenPadding), set internal horizontal padding to zero.
+      padding: screenPadding ?? const EdgeInsets.symmetric(horizontal: 10.0),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        crossAxisAlignment: CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.center,
         children: [
           if (showShuffleButton)
             IconButton(
+              padding: EdgeInsets.zero,
               icon: Icon(
                 Icons.shuffle,
                 color:
                     isShuffling ? effectiveActiveColor : effectiveInactiveColor,
               ),
               iconSize: controlButtonSize *
-                  0.8, // Slightly smaller for shuffle/repeat
+                  0.8, 
               onPressed: onToggleShuffle,
             )
           else
             const SizedBox(width: 48),
           IconButton(
+            padding: EdgeInsets.zero,
             icon: Icon(Icons.skip_previous, color: effectiveControlButtonColor),
             iconSize: controlButtonSize,
             onPressed: onSkipPrevious,
@@ -792,6 +809,10 @@ class UpNextSection extends StatelessWidget {
   ///
   /// Requires [upNextTracks] and [onTrackSelected].
   /// Other parameters are optional for styling.
+
+  /// Screen padding
+  final EdgeInsetsGeometry? screenPadding;
+
   const UpNextSection({
     super.key,
     required this.upNextTracks,
@@ -802,6 +823,7 @@ class UpNextSection extends StatelessWidget {
     this.cardItemSize,
     this.cardBackgroundColor,
     this.cardPadding,
+    this.screenPadding,
   });
 
   @override
@@ -821,72 +843,76 @@ class UpNextSection extends StatelessWidget {
         Theme.of(context).colorScheme.surfaceContainerHighest.withOpacity(0.5);
     final effectiveCardPadding = cardPadding ?? const EdgeInsets.all(8.0);
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Padding(
-          padding: const EdgeInsets.only(
-              top: 16.0, bottom: 8.0), // Theming for this padding?
-          child: Text('Up Next', style: effectiveTitleStyle),
-        ),
-        SizedBox(
-          // Constrain the height of the horizontal list.
-          height: effectiveCardItemSize.height,
-          child: ListView.builder(
-            scrollDirection: Axis.horizontal,
-            itemCount: upNextTracks.length,
-            itemBuilder: (context, index) {
-              final track = upNextTracks[index];
-              // Build each track card.
-              return Container(
-                width: effectiveCardItemSize.width,
-                margin: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
-                decoration: cardDecoration ??
-                    BoxDecoration(
-                        color: effectiveCardBackgroundColor,
-                        borderRadius: BorderRadius.circular(10),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withOpacity(0.1),
-                            blurRadius: 4,
-                            offset: const Offset(0, 2),
-                          )
-                        ]),
-                child: InkWell(
-                  onTap: () => onTrackSelected(track),
-                  borderRadius: BorderRadius.circular(10),
-                  child: Padding(
-                    padding: effectiveCardPadding,
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        ClipRRect(
-                          borderRadius: BorderRadius.circular(8),
-                          child: AppCachedNetworkImage(
-                            url: track.imageUrl,
-                            width: effectiveCardItemSize.width *
-                                0.6, // Relative size
-                            height: effectiveCardItemSize.width * 0.6,
-                            fit: BoxFit.cover,
+    return Padding(
+      padding: screenPadding ?? const EdgeInsets.symmetric(horizontal: 20.0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.only(
+                top: 16.0, bottom: 8.0), // Theming for this padding?
+            child: Text('Up Next', style: effectiveTitleStyle),
+          ),
+          SizedBox(
+            // Constrain the height of the horizontal list.
+            height: effectiveCardItemSize.height,
+            child: ListView.builder(
+              scrollDirection: Axis.horizontal,
+              itemCount: upNextTracks.length,
+              itemBuilder: (context, index) {
+                final track = upNextTracks[index];
+                // Build each track card.
+                return Container(
+                  width: effectiveCardItemSize.width,
+                  margin:
+                      const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+                  decoration: cardDecoration ??
+                      BoxDecoration(
+                          color: effectiveCardBackgroundColor,
+                          borderRadius: BorderRadius.circular(10),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withOpacity(0.1),
+                              blurRadius: 4,
+                              offset: const Offset(0, 2),
+                            )
+                          ]),
+                  child: InkWell(
+                    onTap: () => onTrackSelected(track),
+                    borderRadius: BorderRadius.circular(10),
+                    child: Padding(
+                      padding: effectiveCardPadding,
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          ClipRRect(
+                            borderRadius: BorderRadius.circular(8),
+                            child: AppCachedNetworkImage(
+                              url: track.imageUrl,
+                              width: effectiveCardItemSize.width *
+                                  0.6, // Relative size
+                              height: effectiveCardItemSize.width * 0.6,
+                              fit: BoxFit.cover,
+                            ),
                           ),
-                        ),
-                        SizedBox(height: effectiveCardItemSize.height * 0.05),
-                        Text(
-                          track.title,
-                          style: effectiveCardTextStyle,
-                          maxLines: 2,
-                          textAlign: TextAlign.center,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ],
+                          SizedBox(height: effectiveCardItemSize.height * 0.05),
+                          Text(
+                            track.title,
+                            style: effectiveCardTextStyle,
+                            maxLines: 2,
+                            textAlign: TextAlign.center,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ],
+                      ),
                     ),
                   ),
-                ),
-              );
-            },
+                );
+              },
+            ),
           ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 }

@@ -39,6 +39,11 @@ class AudioPlayerThemeData {
 
   final IconData? backButtonIcon;
   final Color? backButtonColor;
+  final Color? bannerBackgroundColor;
+  final Color? progressSliderActiveColor;
+  final Color? progressSliderThumbColor;
+  final Color? progressSliderInactiveColor;
+
 
   const AudioPlayerThemeData({
     this.screenBackgroundColor,
@@ -72,6 +77,10 @@ class AudioPlayerThemeData {
     this.upNextCardBackgroundColor,
     this.backButtonIcon,
     this.backButtonColor,
+    this.bannerBackgroundColor,
+    this.progressSliderActiveColor,
+    this.progressSliderThumbColor,
+    this.progressSliderInactiveColor,
   });
 }
 

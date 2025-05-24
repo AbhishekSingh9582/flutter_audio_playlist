@@ -6,3 +6,4 @@ export 'src/widgets/current_track_banner.dart';
 export 'src/widgets/audio_player_screen.dart';
 export 'src/providers/audio_playlist_provider.dart';
 export 'src/enums/playback_mode.dart';
+export 'src/theme/audio_player_theme_data.dart';
