@@ -11,7 +11,7 @@ dependencies:
   flutter:
     sdk: flutter
   just_audio: ^0.9.46
-  just_audio_background: ^0.0.1-beta.16
+  just_audio_background: any
   provider: ^6.1.5
   rxdart: ^0.28.0
   cached_network_image: ^3.4.0

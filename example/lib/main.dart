@@ -1,11 +1,17 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_audio_playlist/flutter_video_playlist.dart';
+import 'package:just_audio_background/just_audio_background.dart';
 import 'package:provider/provider.dart';
 
-void main() {
+void main() async{
   // It's good practice to initialize services like JustAudioBackground if your
   // AudioPlayerService uses it, before runApp.
   // Example: await JustAudioBackground.init(...);
+    await JustAudioBackground.init(
+    androidNotificationChannelId: 'com.ryanheise.bg_demo.channel.audio',
+    androidNotificationChannelName: 'Audio playback',
+    androidNotificationOngoing: true,
+  );
   runApp(const MyApp());
 }
 

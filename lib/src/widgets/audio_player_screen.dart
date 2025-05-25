@@ -707,8 +707,7 @@ class ControlsSection extends StatelessWidget {
                 color:
                     isShuffling ? effectiveActiveColor : effectiveInactiveColor,
               ),
-              iconSize: controlButtonSize *
-                  0.8, 
+              iconSize: controlButtonSize * 0.8,
               onPressed: onToggleShuffle,
             )
           else
