@@ -1,4 +1,4 @@
-## 0.0.1 - Initial Release
+## 0.0.1-beta.1 - Initial Beta Release
 
 *   **Pre-built Player UI:** Introduced `AudioPlayerScreen` for a ready-to-use audio playback interface.
 *   **Customization:**
