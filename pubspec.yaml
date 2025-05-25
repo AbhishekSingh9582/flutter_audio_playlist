@@ -1,7 +1,9 @@
 name: flutter_audio_playlist
-description: "A new Flutter package project."
+description: "A customizable Flutter audio player package with pre-built UI and reusable components."
 version: 0.0.1
-homepage:
+homepage: "https://github.com/AbhishekSingh9582/flutter_audio_playlist"
+repository: "https://github.com/AbhishekSingh9582/flutter_audio_playlist"
+license: MIT
 
 environment:
   sdk: ^3.5.1
@@ -11,7 +13,7 @@ dependencies:
   flutter:
     sdk: flutter
   just_audio: ^0.9.46
-  just_audio_background: any
+  just_audio_background: ^0.0.1-beta.17
   provider: ^6.1.5
   rxdart: ^0.28.0
   cached_network_image: ^3.4.0

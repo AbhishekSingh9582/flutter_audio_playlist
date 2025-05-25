@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_audio_playlist/flutter_video_playlist.dart';
+import 'package:flutter_audio_playlist/flutter_audio_playlist.dart';
 import 'package:just_audio_background/just_audio_background.dart';
 import 'package:provider/provider.dart';
 
@@ -296,7 +296,7 @@ class CustomPlayerUIScreen extends StatelessWidget {
                         // This part would require you to implement _showSleepTimerBottomSheet
                         // or a similar utility if you want the exact same behavior as AudioPlayerScreen.
                         // For simplicity, we'll just log here.
-                        print("Sleep timer pressed on custom screen");
+                        // print("Sleep timer pressed on custom screen");
                         // You could call a method similar to _showSleepTimerBottomSheet from AudioPlayerScreen
                         // by passing necessary context and provider.
                       },
@@ -312,7 +312,7 @@ class CustomPlayerUIScreen extends StatelessWidget {
                             customComponentTheme.progressSliderActiveColor,
                         inactiveTrackColor: customComponentTheme
                             .progressSliderActiveColor
-                            ?.withOpacity(0.3),
+                            ?.withAlpha((0.3 * 255).round()), 
                         thumbColor:
                             customComponentTheme.progressSliderThumbColor,
                       ),

@@ -183,7 +183,7 @@ class AudioTile extends StatelessWidget {
                         track.subtitle,
                         // Apply playing-specific style or default subtitle style.
                         style: isCurrentlyPlayingThisTrack
-                            ? (playingSubtitleTextStyle ?? subtitleTextStyle ?? Theme.of(context).textTheme.bodySmall?.copyWith(color: Theme.of(context).colorScheme.primary.withOpacity(0.8)))
+                            ? (playingSubtitleTextStyle ?? subtitleTextStyle ?? Theme.of(context).textTheme.bodySmall?.copyWith(color: Theme.of(context).colorScheme.primary.withAlpha((0.8 * 255).round())))
                             : (subtitleTextStyle ?? Theme.of(context).textTheme.bodySmall?.copyWith(color: Colors.grey)),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,

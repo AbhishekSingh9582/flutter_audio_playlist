@@ -233,7 +233,7 @@ class DefaultAudioPlayerScreenBody extends StatelessWidget {
       effectivePrimaryContentColor =
           theme.primaryContentColor ?? Theme.of(context).colorScheme.onSurface;
       effectiveSecondaryContentColor = theme.secondaryContentColor ??
-          Theme.of(context).colorScheme.onSurface.withOpacity(0.7);
+          Theme.of(context).colorScheme.onSurface.withAlpha((0.7 * 255).round()); // Adjusted for typical secondary opacity
       effectiveBackgroundGradient = theme.screenBackgroundGradient ??
           LinearGradient(colors: [
             Theme.of(context).scaffoldBackgroundColor,
@@ -311,13 +311,13 @@ class DefaultAudioPlayerScreenBody extends StatelessWidget {
                                 effectivePrimaryContentColor,
                             inactiveTrackColor: theme
                                     .progressSliderInactiveColor ?? // Assuming you might add this later
-                                effectiveSecondaryContentColor.withOpacity(0.3),
+                                effectiveSecondaryContentColor.withAlpha((0.3 * 255).round()),
                             // Use the theme's progressSliderThumbColor if available
                             thumbColor: theme.progressSliderThumbColor ??
                                 effectivePrimaryContentColor,
                             overlayColor: (theme.progressSliderActiveColor ??
                                     effectivePrimaryContentColor)
-                                .withOpacity(0.2),
+                                .withAlpha((0.2 * 255).round()),
                           ),
                       timeTextStyle: theme.trackTimeTextStyle ??
                           TextStyle(
@@ -366,9 +366,9 @@ class DefaultAudioPlayerScreenBody extends StatelessWidget {
                                 .bodySmall
                                 ?.copyWith(color: effectivePrimaryContentColor),
                         cardDecoration: theme.upNextCardDecoration,
-                        cardItemSize: theme.upNextCardItemSize,
+                        cardItemSize: theme.upNextCardItemSize ?? const Size(100,150), // Ensure default if null
                         cardBackgroundColor: theme.upNextCardBackgroundColor ??
-                            effectiveSecondaryContentColor.withOpacity(0.2),
+                            effectiveSecondaryContentColor.withAlpha((0.2 * 255).round()),
                         cardPadding: theme.upNextCardPadding,
                       ),
                   ],
@@ -839,7 +839,7 @@ class UpNextSection extends StatelessWidget {
         cardTextStyle ?? Theme.of(context).textTheme.bodySmall;
     final effectiveCardItemSize = cardItemSize ?? const Size(100, 150);
     final effectiveCardBackgroundColor = cardBackgroundColor ??
-        Theme.of(context).colorScheme.surfaceContainerHighest.withOpacity(0.5);
+        Theme.of(context).colorScheme.surfaceContainerHighest.withAlpha((0.5 * 255).round());
     final effectiveCardPadding = cardPadding ?? const EdgeInsets.all(8.0);
 
     return Padding(
@@ -871,7 +871,7 @@ class UpNextSection extends StatelessWidget {
                           borderRadius: BorderRadius.circular(10),
                           boxShadow: [
                             BoxShadow(
-                              color: Colors.black.withOpacity(0.1),
+                              color: Colors.black..withAlpha((0.1 * 255).round()),
                               blurRadius: 4,
                               offset: const Offset(0, 2),
                             )

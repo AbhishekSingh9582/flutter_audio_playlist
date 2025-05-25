@@ -82,7 +82,7 @@ class CurrentTrackBanner extends StatelessWidget {
       bannerIconColor = effectiveTheme.controlButtonIconColor ?? (isDarkDominant ? Colors.white70 : Theme.of(context).colorScheme.primary);
     } else {
       // Fallback to theme's banner color, screen color, or Material surface variant.
-      bannerBackgroundColor = effectiveTheme.bannerBackgroundColor ?? effectiveTheme.screenBackgroundColor ?? Theme.of(context).colorScheme.surfaceVariant;
+      bannerBackgroundColor = effectiveTheme.bannerBackgroundColor ?? effectiveTheme.screenBackgroundColor ?? Theme.of(context).colorScheme.surfaceContainerHighest;
       bannerTextColor = effectiveTheme.primaryContentColor ?? Theme.of(context).colorScheme.onSurfaceVariant;
       bannerIconColor = effectiveTheme.controlButtonIconColor ?? Theme.of(context).colorScheme.primary;
     }
@@ -134,8 +134,8 @@ class CurrentTrackBanner extends StatelessWidget {
                     // Playback position and total duration.
                     '${formatDuration(provider.position)} / ${formatDuration(provider.totalDuration ?? Duration.zero)}',
                     // Apply time text style from theme or default.
-                    style: effectiveTheme.trackTimeTextStyle?.copyWith(color: bannerTextColor.withOpacity(0.8)) ??
-                           TextStyle(fontSize: 12, color: bannerTextColor.withOpacity(0.8)),
+                    style: effectiveTheme.trackTimeTextStyle?.copyWith(color: bannerTextColor.withAlpha((0.8 * 255).round())) ??
+                           TextStyle(fontSize: 12, color: bannerTextColor.withAlpha((0.8 * 255).round())),
                   ),
                   IconButton(
                     // Play/pause button.
@@ -147,7 +147,7 @@ class CurrentTrackBanner extends StatelessWidget {
                   ),
                   IconButton(
                     // Close button to stop playback and dismiss banner (implicitly).
-                    icon: Icon(Icons.close, color: bannerIconColor.withOpacity(0.7)),
+                    icon: Icon(Icons.close, color: bannerIconColor.withAlpha((0.7 * 255).round())),
                     onPressed: provider.stop,
                   ),
                 ],
@@ -158,7 +158,7 @@ class CurrentTrackBanner extends StatelessWidget {
               LinearProgressIndicator(
                 value: provider.position.inMilliseconds /
                     (provider.totalDuration!.inMilliseconds + 1), // Add 1 to avoid division by zero if duration is 0.
-                backgroundColor: bannerTextColor.withOpacity(0.3),
+                backgroundColor: bannerTextColor.withAlpha((0.3 * 255).round()),
                 minHeight: 3,
                 // Use bannerIconColor for the progress value color.
                 valueColor: AlwaysStoppedAnimation<Color>(bannerIconColor),

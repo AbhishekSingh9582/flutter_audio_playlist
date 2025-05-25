@@ -23,15 +23,12 @@ This package allows you to quickly integrate a full-featured audio player screen
 
 ---
 
-**(Optional: Add a GIF or Screenshots of your player here)**
-
-<!-- Example:
 <p align="center">
-  <img src="https://path.to.your/screenshot1.png" width="200" alt="Screenshot 1">
+  <img src="https://github.com/AbhishekSingh9582/flutter_audio_playlist/blob/main/assets/screenshots/screen2.jpeg?raw=true" width="200" alt="Audio Player Screen - Example 1">
+    <img src="https://github.com/AbhishekSingh9582/flutter_audio_playlist/blob/main/assets/screenshots/screen1.jpeg?raw=true" width="200" alt="Audio Player Screen - Example 2">
+      <img src="https://github.com/AbhishekSingh9582/flutter_audio_playlist/blob/main/assets/screenshots/audio_tile.jpeg?raw=true" width="200" alt="Audio Tile Component">  
   &nbsp; &nbsp; &nbsp;
-  <img src="https://path.to.your/player_demo.gif" width="200" alt="Player Demo GIF">
 </p>
--->
 
 ---
 
@@ -277,7 +274,8 @@ Column(
 
 ## API Documentation
 
-For more details on all available classes, methods, and properties, check out the API documentation. <flutter_audio_playlist.dart>
+For more details on all available classes, methods, and properties, check out the [API documentation](https://pub.dev/documentation/flutter_audio_playlist/latest/).
+
 
 ## Contributing
 
